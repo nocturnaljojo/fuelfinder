@@ -7,6 +7,7 @@ import {
   useFuelStats,
   useEngagementGate,
   PRESET_LOCATIONS,
+  PRESET_REGIONS,
   getPriceAgeHours,
   getFreshness,
 } from "./hooks";
@@ -308,8 +309,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Collapsible location sections — ACT open by default
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["ACT"]));
+  // Collapsible location sections — Canberra & ACT open by default
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["Canberra & ACT"]));
   function toggleSection(name: string) {
     setOpenSections(prev => {
       const next = new Set(prev);
@@ -567,36 +568,23 @@ export default function App() {
                 )}
               </div>
 
-              {/* Collapsible preset groups */}
-              <CollapsibleGroup label="ACT" open={openSections.has("ACT")} onToggle={() => toggleSection("ACT")}>
-                {PRESET_LOCATIONS.filter(p => p.region === "ACT").map(p => (
-                  <button
-                    key={p.name}
-                    className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
-                    onClick={() => selectPreset(p)}
-                  >{p.name}</button>
-                ))}
-              </CollapsibleGroup>
-
-              <CollapsibleGroup label="Regional NSW" open={openSections.has("Regional NSW")} onToggle={() => toggleSection("Regional NSW")}>
-                {PRESET_LOCATIONS.filter(p => p.region === "Regional NSW").map(p => (
-                  <button
-                    key={p.name}
-                    className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
-                    onClick={() => selectPreset(p)}
-                  >{p.name}</button>
-                ))}
-              </CollapsibleGroup>
-
-              <CollapsibleGroup label="Tasmania" open={openSections.has("Tasmania")} onToggle={() => toggleSection("Tasmania")}>
-                {PRESET_LOCATIONS.filter(p => p.region === "Tasmania").map(p => (
-                  <button
-                    key={p.name}
-                    className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
-                    onClick={() => selectPreset(p)}
-                  >{p.name}</button>
-                ))}
-              </CollapsibleGroup>
+              {/* Collapsible preset groups — driven by PRESET_REGIONS order */}
+              {PRESET_REGIONS.map(({ name: region, icon }) => (
+                <CollapsibleGroup
+                  key={region}
+                  label={`${icon} ${region}`}
+                  open={openSections.has(region)}
+                  onToggle={() => toggleSection(region)}
+                >
+                  {PRESET_LOCATIONS.filter(p => p.region === region).map(p => (
+                    <button
+                      key={p.name}
+                      className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
+                      onClick={() => selectPreset(p)}
+                    >{p.name}</button>
+                  ))}
+                </CollapsibleGroup>
+              ))}
             </div>
 
             {/* ── Fuel Type ── */}
