@@ -6,14 +6,10 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ── ACT postcodes ────────────────────────────────────────────
-const ACT_POSTCODES = new Set([
-  "2600", "2601", "2602", "2603", "2604", "2605", "2606", "2607",
-  "2608", "2609", "2610", "2611", "2612", "2613", "2614", "2615",
-  "2616", "2617", "2618", "2619", "2620",
-  "2900", "2901", "2902", "2903", "2904", "2905", "2906", "2907",
-  "2908", "2909", "2910", "2911", "2912", "2913", "2914",
-]);
+// ── States to include ─────────────────────────────────────────
+// Scalable: add more states here as we expand
+const SUPPORTED_STATES = new Set(["NSW", "TAS"]);
+const STATES_PARAM = [...SUPPORTED_STATES].join("|"); // "NSW|TAS"
 
 // NSW API fuel code → our canonical label
 const FUEL_TYPE_MAP: Record<string, string> = {
@@ -30,6 +26,23 @@ const NSW_TOKEN_URL = `${NSW_API_BASE}/oauth/client_credential/accesstoken?grant
 function extractPostcode(address: string): string | null {
   const match = address.match(/\b(\d{4})\b\s*$/);
   return match ? match[1] : null;
+}
+
+// Extract suburb from address string (word(s) before STATE POSTCODE)
+// e.g. "123 Main St, GOULBURN NSW 2580" → "Goulburn"
+function extractSuburb(address: string): string | null {
+  const match = address.match(/,\s*([^,]+?)\s+(?:NSW|TAS|VIC|QLD|SA|WA|NT|ACT)\s+\d{4}\s*$/i);
+  if (!match) return null;
+  return match[1]
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+// Extract state from address string
+function extractState(address: string): string | null {
+  const match = address.match(/\b(NSW|TAS|VIC|QLD|SA|WA|NT|ACT)\b/i);
+  return match ? match[1].toUpperCase() : null;
 }
 
 // Format timestamp as required: dd/MM/yyyy hh:mm:ss AM/PM
@@ -60,10 +73,10 @@ async function getAccessToken(apiKey: string, apiSecret: string): Promise<string
   return data.access_token;
 }
 
-// ── Fetch all stations + prices ───────────────────────────────
-// Correct path: /FuelPriceCheck/v2/fuel/prices
+// ── Fetch all stations + prices for supported states ─────────
 async function fetchFuelData(token: string, apiKey: string) {
-  const res = await fetch(`${NSW_API_BASE}/FuelPriceCheck/v2/fuel/prices`, {
+  const url = `${NSW_API_BASE}/FuelPriceCheck/v2/fuel/prices/state?state=${encodeURIComponent(STATES_PARAM)}`;
+  const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json; charset=utf-8",
@@ -72,8 +85,41 @@ async function fetchFuelData(token: string, apiKey: string) {
       requesttimestamp: formatTimestamp(),
     },
   });
+
+  // Fall back to the base endpoint if state-filtered endpoint isn't available
+  if (res.status === 404 || res.status === 400) {
+    console.log(`State endpoint returned ${res.status}, falling back to /fuel/prices`);
+    const res2 = await fetch(`${NSW_API_BASE}/FuelPriceCheck/v2/fuel/prices`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=utf-8",
+        apikey: apiKey,
+        transactionid: crypto.randomUUID(),
+        requesttimestamp: formatTimestamp(),
+      },
+    });
+    if (!res2.ok) throw new Error(`Data fetch failed (${res2.status}): ${await res2.text()}`);
+    return res2.json();
+  }
+
   if (!res.ok) throw new Error(`Data fetch failed (${res.status}): ${await res.text()}`);
   return res.json();
+}
+
+// ── Fetch all DB stations in batches to avoid URL length limits ──
+// Splits an array into chunks and runs the callback on each
+async function fetchInBatches<T>(
+  items: string[],
+  batchSize: number,
+  fetcher: (batch: string[]) => Promise<T[]>
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const data = await fetcher(batch);
+    results.push(...data);
+  }
+  return results;
 }
 
 // ── Main handler ──────────────────────────────────────────────
@@ -104,68 +150,112 @@ Deno.serve(async (req: Request) => {
     console.log("Token OK");
 
     // Step 2: Fetch all stations + prices
-    console.log("Fetching fuel data...");
-    const { stations, prices } = await fetchFuelData(token, apiKey);
-    console.log(`API returned ${stations.length} stations, ${prices.length} prices`);
+    console.log(`Fetching fuel data for states: ${STATES_PARAM}...`);
+    const rawData = await fetchFuelData(token, apiKey);
+    const allStations: any[] = rawData.stations ?? [];
+    const allPrices: any[] = rawData.prices ?? [];
+    console.log(`API returned ${allStations.length} stations, ${allPrices.length} prices`);
 
-    // Step 3: Filter to ACT by parsing postcode from address
-    // Station join key = station.code (prices use stationcode to match)
-    const actStations = stations.filter((s: any) => {
-      const pc = extractPostcode(s.address ?? "");
-      return pc && ACT_POSTCODES.has(pc);
+    // Step 3: Deduplicate stations by code and filter to supported states
+    const seen = new Set<string>();
+    const filteredStations = allStations.filter((s: any) => {
+      const code = String(s.code);
+      if (seen.has(code)) return false;
+      seen.add(code);
+      // Filter by state extracted from address
+      const state = extractState(s.address ?? "");
+      return state && SUPPORTED_STATES.has(state);
     });
-    const actCodeSet = new Set(actStations.map((s: any) => String(s.code)));
-    console.log(`ACT stations found: ${actStations.length}`);
 
-    if (actStations.length === 0) {
+    console.log(`Stations after dedup + state filter: ${filteredStations.length}`);
+
+    if (filteredStations.length === 0) {
       return new Response(
-        JSON.stringify({ ok: true, message: "No ACT stations found", elapsed_ms: Date.now() - startedAt }),
+        JSON.stringify({ ok: true, message: "No stations found for supported states", elapsed_ms: Date.now() - startedAt }),
         { headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Step 4: Upsert station metadata (use code as api_station_id)
-    const stationRows = actStations.map((s: any) => ({
+    const filteredCodeSet = new Set(filteredStations.map((s: any) => String(s.code)));
+
+    // Step 4: Upsert station metadata
+    const stationRows = filteredStations.map((s: any) => ({
       api_station_id: String(s.code),
       name: s.name,
       brand: s.brand ?? null,
       address: s.address ?? null,
-      suburb: null, // not provided by API, parse from address if needed
+      suburb: extractSuburb(s.address ?? "") ?? null,
+      state: extractState(s.address ?? "") ?? null,
       postcode: extractPostcode(s.address ?? "") ?? null,
       lat: s.location?.latitude ?? null,
       lng: s.location?.longitude ?? null,
       updated_at: new Date().toISOString(),
     }));
 
-    const { error: upsertError } = await supabase
-      .from("stations")
-      .upsert(stationRows, { onConflict: "api_station_id" });
-    if (upsertError) throw new Error(`Station upsert: ${upsertError.message}`);
+    // Batch upsert in chunks of 500 to avoid payload limits
+    for (let i = 0; i < stationRows.length; i += 500) {
+      const batch = stationRows.slice(i, i + 500);
+      const { error: upsertError } = await supabase
+        .from("stations")
+        .upsert(batch, { onConflict: "api_station_id" });
+      if (upsertError) throw new Error(`Station upsert: ${upsertError.message}`);
+    }
     console.log(`Upserted ${stationRows.length} stations`);
 
     // Step 5: Get internal DB IDs
-    const { data: dbStations, error: fetchError } = await supabase
-      .from("stations")
-      .select("id, api_station_id")
-      .in("api_station_id", actStations.map((s: any) => String(s.code)));
-    if (fetchError) throw new Error(`Station fetch: ${fetchError.message}`);
+    // ── FIX: Fetch ALL stations from DB (no .in() filter) to avoid HTTP/2 stream
+    //         error caused by URLs that are too long with 1500+ station IDs.
+    //         After upserting, all our stations are guaranteed to be in the DB.
+    console.log("Fetching DB station IDs...");
+    let dbStations: any[] = [];
+    let from = 0;
+    const PAGE_SIZE = 1000;
 
-    const codeToDbId = new Map<string, number>(
-      (dbStations ?? []).map((s: any) => [s.api_station_id, s.id])
-    );
+    // Paginate through all DB stations
+    while (true) {
+      const { data, error: fetchError } = await supabase
+        .from("stations")
+        .select("id, api_station_id")
+        .range(from, from + PAGE_SIZE - 1);
 
-    // Step 6: Build price rows (prices join via stationcode → station.code)
+      if (fetchError) throw new Error(`Station fetch: ${fetchError.message}`);
+      if (!data || data.length === 0) break;
+
+      dbStations.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    console.log(`Fetched ${dbStations.length} stations from DB`);
+
+    // Build map: api_station_id → internal DB id (only for our filtered stations)
+    const codeToDbId = new Map<string, number>();
+    for (const s of dbStations) {
+      if (filteredCodeSet.has(String(s.api_station_id))) {
+        codeToDbId.set(String(s.api_station_id), s.id);
+      }
+    }
+
+    console.log(`Mapped ${codeToDbId.size} stations to DB IDs`);
+
+    // Step 6: Build price rows
     const now = new Date().toISOString();
-    const priceRows = prices
-      .filter((p: any) => actCodeSet.has(String(p.stationcode)) && codeToDbId.has(String(p.stationcode)))
+    const priceRows = allPrices
+      .filter((p: any) => filteredCodeSet.has(String(p.stationcode)) && codeToDbId.has(String(p.stationcode)))
       .flatMap((p: any) => {
         const ft = FUEL_TYPE_MAP[p.fueltype];
         if (!ft) return [];
-        return [{ station_id: codeToDbId.get(String(p.stationcode)), fuel_type: ft, price_cents: p.price, recorded_at: now }];
+        return [{
+          station_id: codeToDbId.get(String(p.stationcode)),
+          fuel_type: ft,
+          price_cents: p.price,
+          recorded_at: now,
+        }];
       });
+
     console.log(`Inserting ${priceRows.length} price records...`);
 
-    // Step 7: Batch insert
+    // Step 7: Batch insert prices in chunks of 500
     let inserted = 0;
     for (let i = 0; i < priceRows.length; i += 500) {
       const { error } = await supabase.from("price_history").insert(priceRows.slice(i, i + 500));
@@ -174,10 +264,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const elapsed = Date.now() - startedAt;
-    console.log(`Done: ${inserted} prices in ${elapsed}ms`);
+    console.log(`Done: ${stationRows.length} stations, ${inserted} prices in ${elapsed}ms`);
 
     return new Response(
-      JSON.stringify({ ok: true, stations_upserted: stationRows.length, prices_inserted: inserted, elapsed_ms: elapsed }),
+      JSON.stringify({
+        ok: true,
+        states: [...SUPPORTED_STATES],
+        stations_upserted: stationRows.length,
+        prices_inserted: inserted,
+        elapsed_ms: elapsed,
+      }),
       { headers: { "Content-Type": "application/json" } }
     );
 

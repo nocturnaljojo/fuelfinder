@@ -119,6 +119,54 @@ export function useStations(
   return { stations, loading, error, lastRefresh, refetch: fetchStations };
 }
 
+// ── usePriceHistory ───────────────────────────────────────────
+export interface PricePoint {
+  date: string;       // "2024-03-22"
+  label: string;      // "22 Mar"
+  price: number;      // cents
+}
+
+export function usePriceHistory(stationId: number | null, fuelType: string) {
+  const [history, setHistory] = useState<PricePoint[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!stationId) return;
+    setLoading(true);
+
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+
+    supabase
+      .from("price_history")
+      .select("price_cents, recorded_at")
+      .eq("station_id", stationId)
+      .eq("fuel_type", fuelType)
+      .gte("recorded_at", since.toISOString())
+      .order("recorded_at", { ascending: true })
+      .then(({ data }) => {
+        // Group by day — keep last reading of each day
+        const byDay = new Map<string, number>();
+        for (const row of data ?? []) {
+          const day = row.recorded_at.slice(0, 10);
+          byDay.set(day, row.price_cents);
+        }
+        setHistory(
+          [...byDay.entries()].map(([date, price]) => ({
+            date,
+            price,
+            label: new Date(date + "T12:00:00").toLocaleDateString([], {
+              day: "numeric", month: "short",
+            }),
+          }))
+        );
+        setLoading(false);
+      });
+  }, [stationId, fuelType]);
+
+  return { history, loading };
+}
+
 // ── useCheapestAndPriciest ────────────────────────────────────
 export function useCheapestAndPriciest(stations: Station[]) {
   const sorted = [...stations].sort((a, b) => a.price_cents - b.price_cents);
