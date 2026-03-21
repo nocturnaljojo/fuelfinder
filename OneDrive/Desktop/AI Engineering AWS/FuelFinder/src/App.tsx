@@ -66,16 +66,38 @@ const STATE_ABBR: Record<string, string> = {
   "Northern Territory":           "NT",
 };
 
-function formatNominatim(r: NominatimResult): { name: string; meta: string } {
-  const parts  = r.display_name.split(",").map(s => s.trim());
-  const name   = parts[0];
-  const state  = r.address.state ?? "";
-  const abbr   = STATE_ABBR[state] || state;
-  const post   = r.address.postcode ? ` ${r.address.postcode}` : "";
-  // Second breadcrumb — suburb or LGA name
-  const area   = r.address.suburb || r.address.town || r.address.city || parts[1] || "";
-  const meta   = [area !== name ? area : "", abbr + post].filter(Boolean).join(", ");
-  return { name, meta };
+// Distinct colours per state — high contrast on dark background
+const STATE_COLORS: Record<string, { bg: string; text: string }> = {
+  "ACT": { bg: "#1d6fa4", text: "#fff" },
+  "NSW": { bg: "#0d3f6e", text: "#fff" },
+  "VIC": { bg: "#4a1a6e", text: "#fff" },
+  "QLD": { bg: "#7b1c31", text: "#fff" },
+  "SA":  { bg: "#b84300", text: "#fff" },
+  "WA":  { bg: "#7a6200", text: "#ffe" },
+  "TAS": { bg: "#005c3b", text: "#fff" },
+  "NT":  { bg: "#7a3200", text: "#fff" },
+};
+
+function formatNominatim(r: NominatimResult): {
+  name: string; abbr: string; postcode: string; area: string;
+} {
+  const parts = r.display_name.split(",").map(s => s.trim());
+  const name  = parts[0];
+
+  // Try structured address.state first, then walk display_name backwards for a known state
+  const stateRaw = r.address?.state
+    ?? parts.slice(1).reverse().find(p => STATE_ABBR[p] !== undefined)
+    ?? "";
+  const abbr     = STATE_ABBR[stateRaw] || stateRaw.toUpperCase().slice(0, 3);
+  const postcode = r.address?.postcode ?? "";
+
+  // Contextual area — first part of display_name that isn't the suburb or state
+  const candidates = [
+    r.address?.suburb, r.address?.town, r.address?.city, r.address?.village, parts[1],
+  ];
+  const area = candidates.find(a => a && a !== name && a !== stateRaw && !STATE_ABBR[a ?? ""]) ?? "";
+
+  return { name, abbr, postcode, area };
 }
 
 // ── Brand badge ───────────────────────────────────────────────
@@ -256,6 +278,17 @@ function EngagementModal({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
+// ── Relative time helper ──────────────────────────────────────
+function timeAgo(date: Date, now: number): string {
+  const diffMs  = now - date.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1)  return "just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr  < 24) return `${diffHr}h ago`;
+  return date.toLocaleDateString([], { day: "numeric", month: "short" });
+}
+
 // ── App ───────────────────────────────────────────────────────
 export default function App() {
   const [fuelType, setFuelType]     = useState<FuelType>("U91");
@@ -286,6 +319,13 @@ export default function App() {
   }
 
   const { showGate, recordView, dismissGate } = useEngagementGate();
+
+  // Ticks every 30s so relative timestamps ("2 min ago") update automatically
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const { coords: gpsCoords, isDefault } = useGeolocation();
   const coords: [number, number] = manualCoords ?? gpsCoords;
@@ -480,7 +520,8 @@ export default function App() {
                 {showSuggestions && suggestions.length > 0 && (
                   <ul className="location-suggestions" role="listbox">
                     {suggestions.map((r, i) => {
-                      const { name, meta } = formatNominatim(r);
+                      const { name, abbr, postcode, area } = formatNominatim(r);
+                      const badgeColors = STATE_COLORS[abbr] ?? { bg: "#374151", text: "#fff" };
                       return (
                         <li
                           key={i}
@@ -488,10 +529,22 @@ export default function App() {
                           role="option"
                           onMouseDown={() => handleSuggestionClick(r)}
                         >
-                          <span className="suggestion-icon">📍</span>
+                          <span className="suggestion-pin">📍</span>
                           <span className="suggestion-body">
-                            <span className="suggestion-name">{name}</span>
-                            {meta && <span className="suggestion-meta">{meta}</span>}
+                            <span className="suggestion-main-row">
+                              <span className="suggestion-name">{name}</span>
+                              {abbr && (
+                                <span
+                                  className="suggestion-state-badge"
+                                  style={{ background: badgeColors.bg, color: badgeColors.text }}
+                                >{abbr}</span>
+                              )}
+                            </span>
+                            {(area || postcode) && (
+                              <span className="suggestion-detail">
+                                {[area, postcode].filter(Boolean).join(" · ")}
+                              </span>
+                            )}
                           </span>
                         </li>
                       );
@@ -619,11 +672,8 @@ export default function App() {
               {loading ? "…" : "↻ Refresh"}
             </button>
             {lastRefresh && (
-              <span className="last-refresh">
-                {lastRefresh.toLocaleString([], {
-                  day: "2-digit", month: "short", year: "numeric",
-                  hour: "2-digit", minute: "2-digit",
-                })}
+              <span className="last-refresh" title={lastRefresh.toLocaleString()}>
+                Updated {timeAgo(lastRefresh, now)}
               </span>
             )}
           </div>
