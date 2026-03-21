@@ -1,10 +1,14 @@
 import { useState, useMemo } from "react";
+import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import {
   useGeolocation,
   useStations,
   useCheapestAndPriciest,
   useFuelStats,
+  useEngagementGate,
   PRESET_LOCATIONS,
+  getPriceAgeHours,
+  getFreshness,
 } from "./hooks";
 import { FUEL_TYPES } from "./types/fuel";
 import type { FuelType, SortMode, Station } from "./types/fuel";
@@ -132,6 +136,8 @@ function useBestValue(stations: Station[], count = 5): Station[] {
 function StationRow({ station, min, max, onSelect }: {
   station: Station; min: number; max: number; onSelect: (s: Station) => void;
 }) {
+  const ageHours  = getPriceAgeHours(station.recorded_at);
+  const freshness = getFreshness(ageHours);
   return (
     <div className="station-row" onClick={() => onSelect(station)}>
       <div className="station-row-left">
@@ -145,7 +151,14 @@ function StationRow({ station, min, max, onSelect }: {
         <span className="station-price" style={{ color: priceColor(station.price_cents, min, max) }}>
           {formatPrice(station.price_cents)}
         </span>
-        <span className="station-dist">{formatDistance(station.distance_km)}</span>
+        <div className="station-row-bottom">
+          <span className="station-dist">{formatDistance(station.distance_km)}</span>
+          <span
+            className="freshness-dot"
+            title={`${freshness.label} · updated ${ageHours < 1 ? "< 1h" : Math.round(ageHours) + "h"} ago`}
+            style={{ background: freshness.color }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -176,6 +189,35 @@ function CollapsibleGroup({
   );
 }
 
+// ── Engagement gate modal ─────────────────────────────────────
+function EngagementModal({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="engagement-overlay" onClick={onDismiss}>
+      <div className="engagement-modal" onClick={e => e.stopPropagation()}>
+        <div className="engagement-fuel-icon">⛽</div>
+        <h2 className="engagement-title">You're finding great deals!</h2>
+        <p className="engagement-subtitle">
+          Create a free account to unlock the full FuelFinder experience.
+        </p>
+        <ul className="engagement-perks">
+          <li><span className="perk-icon">📈</span> 30-day price history charts</li>
+          <li><span className="perk-icon">⭐</span> Save favourite stations</li>
+          <li><span className="perk-icon">🔔</span> Price drop alerts <span className="perk-soon">Coming soon</span></li>
+          <li><span className="perk-icon">🏠</span> Set a home location</li>
+        </ul>
+        <SignInButton mode="modal">
+          <button className="engagement-cta" onClick={onDismiss}>
+            Create free account — it's quick
+          </button>
+        </SignInButton>
+        <button className="engagement-skip" onClick={onDismiss}>
+          Continue browsing for now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────
 export default function App() {
   const [fuelType, setFuelType]     = useState<FuelType>("U91");
@@ -201,6 +243,8 @@ export default function App() {
       return next;
     });
   }
+
+  const { showGate, recordView, dismissGate } = useEngagementGate();
 
   const { coords: gpsCoords, isDefault } = useGeolocation();
   const coords: [number, number] = manualCoords ?? gpsCoords;
@@ -242,6 +286,7 @@ export default function App() {
   function handleSelectStation(s: Station) {
     setSelectedStation(s);
     setMobileSidebarOpen(false);
+    recordView(); // increment engagement counter — may trigger gate modal
   }
 
   function selectGPS() {
@@ -422,6 +467,21 @@ export default function App() {
             </div>
           </>
         )}
+
+        {/* ── Buy Me a Coffee ── */}
+        <div className="sidebar-bmc">
+          <a
+            href="https://www.buymeacoffee.com/nocturnaljv"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bmc-btn"
+            title="Support FuelFinder"
+          >
+            <span className="bmc-emoji">☕</span>
+            <span className="bmc-text">Buy me a coffee</span>
+          </a>
+          <p className="bmc-tagline">Built free for Australians 🇦🇺</p>
+        </div>
       </aside>
 
       {/* ── Main panel ──────────────────────────────────────── */}
@@ -446,6 +506,21 @@ export default function App() {
           </div>
 
           <div className="topbar-actions">
+            <a
+              href="https://www.buymeacoffee.com/nocturnaljv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="topbar-bmc"
+              title="Buy me a coffee"
+            >☕</a>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="signin-btn">Sign in</button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
             <button className="refresh-btn" onClick={refetch} disabled={loading}>
               {loading ? "…" : "↻ Refresh"}
             </button>
@@ -560,6 +635,9 @@ export default function App() {
 
         </div>
       </main>
+
+      {/* Engagement gate modal — shown to non-signed-in users after 5 station views */}
+      {showGate && <EngagementModal onDismiss={dismissGate} />}
 
       {/* Station bottom sheet */}
       <StationSheet

@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useUser, SignInButton } from "@clerk/clerk-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { Station, FuelType } from "./types/fuel";
-import { usePriceHistory } from "./hooks";
+import { usePriceHistory, getPriceAgeHours, getFreshness } from "./hooks";
 
 interface StationSheetProps {
   station: Station | null;
@@ -41,17 +42,32 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 export default function StationSheet({ station, allStationsForStation, onClose }: StationSheetProps) {
+  const { isSignedIn } = useUser();
   const [selectedFuel, setSelectedFuel] = useState<FuelType | null>(null);
 
   // The fuel type to show history for — default to the station's current fuel type
   const activeFuel = selectedFuel ?? station?.fuel_type ?? "U91";
 
-  const { history, loading: histLoading } = usePriceHistory(
+  const { history, loading: histLoading, unchangedHours, lastChangedAt } = usePriceHistory(
     station?.station_id ?? null,
     activeFuel
   );
 
+  // ── All hooks must be above this guard ──
   if (!station) return null;
+
+  const dataAgeHours = getPriceAgeHours(station.recorded_at);
+  const freshness    = getFreshness(dataAgeHours);
+
+  // Stock warning: price unchanged 48h+ OR data itself is very stale
+  const stockWarning = (unchangedHours !== null && unchangedHours >= 48) || dataAgeHours >= 48;
+
+  function formatHoursAgo(hours: number): string {
+    if (hours < 1)  return "less than 1 hour ago";
+    if (hours < 24) return `${Math.round(hours)} hours ago`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days !== 1 ? "s" : ""} ago`;
+  }
 
   function openDirections() {
     window.open(
@@ -90,6 +106,17 @@ export default function StationSheet({ station, allStationsForStation, onClose }
             <h2 className="sheet-name">{station.name}</h2>
             <p className="sheet-meta">{station.brand ?? ""}{station.address ? ` · ${station.address}` : ""}</p>
             <p className="sheet-meta">{formatDistance(station.distance_km)} away · Updated {updatedAt}</p>
+          <div className="sheet-freshness">
+            <span className="freshness-badge" style={{ background: freshness.color + "22", color: freshness.color, borderColor: freshness.color + "44" }}>
+              <span className="freshness-dot-sm" style={{ background: freshness.color }} />
+              {freshness.label} · {formatHoursAgo(dataAgeHours)}
+            </span>
+          </div>
+          {stockWarning && (
+            <div className="sheet-stock-warning">
+              ⚠️ Price hasn't changed in {unchangedHours !== null ? formatHoursAgo(unchangedHours) : formatHoursAgo(dataAgeHours)} — this station may be <strong>closed or out of stock</strong>. Verify before driving.
+            </div>
+          )}
           </div>
           <button className="sheet-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
@@ -113,14 +140,51 @@ export default function StationSheet({ station, allStationsForStation, onClose }
           </div>
         )}
 
-        {/* Price history chart */}
+        {/* Price history chart — gated for signed-out users */}
         <div className="sheet-chart-section">
           <div className="sheet-chart-header">
-            <span className="sheet-chart-title">30-Day Price History · {activeFuel}</span>
-            {!histLoading && <Trend history={history} />}
+            <div>
+              <span className="sheet-chart-title">30-Day Price History · {activeFuel}</span>
+              {isSignedIn && !histLoading && lastChangedAt && unchangedHours !== null && (
+                <span className="sheet-last-changed">
+                  Price last changed {formatHoursAgo(unchangedHours)}
+                </span>
+              )}
+            </div>
+            {isSignedIn && !histLoading && <Trend history={history} />}
           </div>
 
-          {histLoading ? (
+          {!isSignedIn ? (
+            /* Signed-out gate — blurred dummy chart + CTA overlay */
+            <div className="chart-gate-wrap">
+              <div className="chart-gate-blur" aria-hidden="true">
+                {/* Static decorative bars to hint at what's behind the gate */}
+                <svg width="100%" height="160" viewBox="0 0 320 160" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="gateGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"  stopColor="#3b82f6" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <polyline
+                    points="0,120 40,100 80,115 120,70 160,90 200,55 240,75 280,40 320,60"
+                    fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round"
+                  />
+                  <polygon
+                    points="0,120 40,100 80,115 120,70 160,90 200,55 240,75 280,40 320,60 320,160 0,160"
+                    fill="url(#gateGrad)"
+                  />
+                </svg>
+              </div>
+              <div className="chart-gate-overlay">
+                <div className="chart-gate-icon">📈</div>
+                <p className="chart-gate-text">Sign in to see 30-day price history</p>
+                <SignInButton mode="modal">
+                  <button className="chart-gate-btn">Sign in free</button>
+                </SignInButton>
+              </div>
+            </div>
+          ) : histLoading ? (
             <div className="chart-loading">Loading history…</div>
           ) : history.length < 2 ? (
             <div className="chart-empty">Not enough history yet — check back after a few refreshes.</div>
