@@ -129,7 +129,7 @@ function BrandBadge({ brand }: { brand: string | null }) {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────
-function Leaderboard({ title, subtitle, icon, stations, min, max, onSelect, accentColor }: {
+function Leaderboard({ title, subtitle, icon, stations, min, max, onSelect, accentColor, distFirst = false }: {
   title: string;
   subtitle: string;
   icon: string;
@@ -138,6 +138,7 @@ function Leaderboard({ title, subtitle, icon, stations, min, max, onSelect, acce
   max: number;
   accentColor: string;
   onSelect: (s: Station) => void;
+  distFirst?: boolean;  // true → lead with distance, show price as secondary
 }) {
   return (
     <div className="leaderboard">
@@ -158,11 +159,22 @@ function Leaderboard({ title, subtitle, icon, stations, min, max, onSelect, acce
               <span className="lb-suburb">{parseSuburbState(s.address)}</span>
             </div>
             <div className="lb-right">
-              <span className="lb-price" style={{ color: accentColor }}>
-                {formatPrice(s.price_cents)}
-              </span>
-              {s.distance_km !== undefined && (
-                <span className="lb-dist">{formatDistance(s.distance_km)}</span>
+              {distFirst ? (
+                <>
+                  <span className="lb-price" style={{ color: accentColor }}>
+                    {formatDistance(s.distance_km)}
+                  </span>
+                  <span className="lb-dist">{formatPrice(s.price_cents)}</span>
+                </>
+              ) : (
+                <>
+                  <span className="lb-price" style={{ color: accentColor }}>
+                    {formatPrice(s.price_cents)}
+                  </span>
+                  {s.distance_km !== undefined && (
+                    <span className="lb-dist">{formatDistance(s.distance_km)}</span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -343,6 +355,14 @@ export default function App() {
   const { stations, loading, error, lastRefresh, refetch } = useStations(fuelType, coords, radiusKm);
   const { cheapest, priciest } = useCheapestAndPriciest(stations);
   const bestValue = useBestValue(stations);
+  const nearest = useMemo(
+    () =>
+      [...stations]
+        .filter(s => s.distance_km !== undefined)
+        .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999))
+        .slice(0, 5),
+    [stations]
+  );
   const stats = useFuelStats(stations);
 
   const prices = stations.map(s => s.price_cents);
@@ -763,9 +783,18 @@ export default function App() {
             </div>
           )}
 
-          {/* Leaderboards — 3 cards */}
+          {/* Leaderboards — 4 cards */}
           {cheapest.length > 0 && (
             <div className="leaderboards-row">
+              <Leaderboard
+                icon="⭐"
+                title="Cheapest & Nearest"
+                subtitle={`Best price + distance${radiusKm ? ` within ${radiusKm}km` : ""}`}
+                stations={bestValue}
+                min={min} max={max}
+                accentColor="#3b82f6"
+                onSelect={handleSelectStation}
+              />
               <Leaderboard
                 icon="💰"
                 title="Cheapest"
@@ -776,12 +805,13 @@ export default function App() {
                 onSelect={handleSelectStation}
               />
               <Leaderboard
-                icon="⭐"
-                title="Cheapest & Nearest"
-                subtitle={`Best price + distance${radiusKm ? ` within ${radiusKm}km` : ""}`}
-                stations={bestValue}
+                icon="📍"
+                title="Nearest"
+                subtitle={`Closest stations${radiusKm ? ` within ${radiusKm}km` : ""}`}
+                stations={nearest}
                 min={min} max={max}
-                accentColor="#3b82f6"
+                accentColor="#f59e0b"
+                distFirst
                 onSelect={handleSelectStation}
               />
               <Leaderboard
