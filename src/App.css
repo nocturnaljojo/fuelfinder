@@ -18,6 +18,12 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Remove 300ms tap delay on iOS for all interactive elements */
+button, a, [role="option"], [role="listbox"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -1062,21 +1068,117 @@ body {
 
 /* ── Mobile ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
+
+  /* ── Core layout ── */
   .app-layout { flex-direction: column; height: 100vh; }
 
+  /* Sidebar: off-canvas drawer */
   .sidebar {
     position: fixed; top: 0; left: 0; height: 100vh;
     transform: translateX(-100%); transition: transform 0.25s ease;
-    z-index: 50; width: 280px;
+    z-index: 50; width: min(82vw, 320px);
   }
-  .sidebar--open { transform: translateX(0); }
-  .sidebar--collapsed { width: 280px; } /* no collapse on mobile */
+  .sidebar--open   { transform: translateX(0); }
+  .sidebar--collapsed { width: min(82vw, 320px); } /* no collapse icon on mobile */
   .sidebar-overlay { display: block; }
 
+  /* ── Topbar ── */
   .hamburger { display: flex; }
-  .last-refresh { display: none; }
-  .map-container { height: 32vh; min-height: 200px; }
-  .leaderboards-row { gap: 8px; padding: 10px 12px; }
-  .leaderboard { flex: 0 0 260px; }
+  .topbar { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
+  .topbar-context { min-width: 0; flex: 1; }
+  .topbar-count, .topbar-loading { font-size: 11px; }
+  .topbar-bmc   { display: none; }          /* sidebar has the full BMC button */
+  .last-refresh { display: none; }          /* no room; shown on desktop */
+  .signin-btn   { padding: 5px 10px; font-size: 12px; }
+  .refresh-btn  { padding: 5px 8px;  font-size: 12px; }
+
+  /* ── Map ── */
+  .map-container { height: 30vh; min-height: 180px; }
+
+  /* ── Stats strip ── */
+  .stats-strip        { height: 44px; }
+  .stats-strip-value  { font-size: 13px; }
+  .stats-strip-label  { font-size: 9px; }
+
+  /* ── Leaderboards — snap to cards on swipe ── */
+  .leaderboards-row {
+    gap: 8px; padding: 10px 12px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .leaderboard {
+    flex: 0 0 82vw;       /* nearly full-width card = easy to read */
+    max-width: 320px;
+    scroll-snap-align: start;
+  }
+
+  /* ── Touch targets: WCAG AA minimum 44px ── */
+  .chip {
+    padding: 9px 14px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+  .sidebar-loc-btn  { min-height: 44px; padding: 10px 14px; font-size: 13px; }
+  .collapsible-toggle { padding: 10px 8px; min-height: 40px; }
+  .sort-btn         { padding: 8px 12px; }
+  .sheet-fuel-tab   { padding: 10px 14px; }
+  .tab-price        { font-size: 15px; }
+  .sheet-close      { width: 36px; height: 36px; font-size: 18px; }
+
+  /* ── Station list ── */
   .station-list-header { flex-direction: column; align-items: flex-start; }
+  .station-row  { padding: 13px 14px; }
+  .station-name { font-size: 14px; }
+  .station-price { font-size: 16px; }
+  /* Bottom padding so last station isn't hidden behind iOS home bar */
+  .station-list { padding-bottom: env(safe-area-inset-bottom, 20px); }
+
+  /* ── Bottom sheet ── */
+  .sheet {
+    max-height: 88vh;
+    /* Respect iPhone home bar */
+    padding-bottom: max(28px, env(safe-area-inset-bottom, 28px));
+  }
+  .sheet-handle { width: 44px; height: 5px; margin: 14px auto 0; } /* bigger drag handle */
+  .sheet-actions { padding: 0 16px 8px; }
+  .sheet-chart-section { padding: 12px 12px 8px; }
+  .chart-gate-wrap { margin: 0; } /* remove horizontal margin inside sheet */
+
+  /* ── Engagement modal → bottom sheet on mobile ── */
+  .engagement-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .engagement-modal {
+    border-radius: 24px 24px 0 0;
+    max-width: 100%;
+    width: 100%;
+    padding: 28px 22px;
+    padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px));
+    border-bottom: none;
+    animation: slideUp 0.28s ease; /* reuse existing */
+  }
+  .engagement-perks li { font-size: 13px; }
+  .engagement-cta { font-size: 14px; padding: 13px 20px; }
+
+  /* ── Autocomplete dropdown ── */
+  .location-suggestions { max-height: 240px; overflow-y: auto; }
+
+  /* ── BMC sidebar button: full width ── */
+  .sidebar-bmc { padding: 16px 14px 20px; }
+  .bmc-btn     { width: 100%; justify-content: center; }
+
+  /* ── Scrollable content: iOS safe area ── */
+  .main-content-scroll {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ── Very small phones (iPhone SE, 320px) ── */
+@media (max-width: 380px) {
+  .stats-strip-value { font-size: 12px; }
+  .stats-strip-label { font-size: 8px; }
+  .topbar-count { display: none; } /* hide text, hamburger is enough */
+  .leaderboard  { flex: 0 0 90vw; }
+  .chip         { padding: 8px 10px; font-size: 12px; }
 }
