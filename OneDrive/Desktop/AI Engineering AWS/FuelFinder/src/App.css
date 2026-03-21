@@ -111,7 +111,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--muted);
+  color: #94a3b8;
   margin-bottom: 10px;
 }
 
@@ -146,7 +146,7 @@ body {
 .sidebar-loc-btn {
   display: block; width: 100%; text-align: left;
   background: none; border: none; border-radius: 6px;
-  color: var(--muted); padding: 5px 8px;
+  color: #cbd5e1; padding: 5px 8px;
   font-size: 13px; cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
@@ -161,9 +161,9 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--muted);
+  color: #94a3b8;
   padding: 8px 8px 3px;
-  opacity: 0.6;
+  opacity: 0.85;
 }
 
 /* ── Location autocomplete search ────────────────────────── */
@@ -316,13 +316,13 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; background: none; border: none;
   padding: 5px 8px; border-radius: 6px;
-  color: var(--muted); font-size: 10px; font-weight: 700;
+  color: #94a3b8; font-size: 10px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.08em;
   cursor: pointer; transition: color 0.1s, background 0.1s;
 }
 .collapsible-toggle:hover { color: var(--text); background: var(--surface2); }
 .chevron {
-  font-size: 14px; font-weight: 400; color: var(--muted);
+  font-size: 14px; font-weight: 400; color: #94a3b8;
   transition: transform 0.18s; display: inline-block;
   transform: rotate(0deg);
 }
@@ -333,7 +333,7 @@ body {
 .chip-grid { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip {
   background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 20px; color: var(--muted);
+  border-radius: 20px; color: #cbd5e1;
   padding: 4px 11px; font-size: 12px; font-weight: 500;
   cursor: pointer; transition: all 0.15s;
 }
