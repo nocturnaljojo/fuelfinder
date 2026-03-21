@@ -26,6 +26,52 @@ function priceColor(price: number, min: number, max: number) {
   return "#ef4444";
 }
 
+// Parse "suburb STATE" from address string e.g. "123 Main St, FYSHWICK ACT 2609" → "Fyshwick · ACT"
+function parseSuburbState(address: string | null): string {
+  if (!address) return "";
+  const parts = address.split(",");
+  const last = parts[parts.length - 1].trim();
+  // Remove postcode (4 digits at end)
+  const withoutPostcode = last.replace(/\s*\d{4}\s*$/, "").trim();
+  // Split into suburb and state
+  const words = withoutPostcode.split(/\s+/);
+  const state = words[words.length - 1];
+  const suburb = words.slice(0, -1).map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
+  return suburb && state ? `${suburb} · ${state}` : withoutPostcode;
+}
+
+// Brand badge — colored circle with brand initial
+const BRAND_COLORS: Record<string, { bg: string; text: string }> = {
+  "BP":              { bg: "#00A651", text: "#fff" },
+  "Ampol":           { bg: "#E8002D", text: "#fff" },
+  "Caltex":          { bg: "#E8002D", text: "#fff" },
+  "Shell":           { bg: "#FFD500", text: "#d00" },
+  "7-Eleven":        { bg: "#F7702A", text: "#fff" },
+  "Coles Express":   { bg: "#E2001A", text: "#fff" },
+  "United":          { bg: "#003087", text: "#fff" },
+  "Liberty":         { bg: "#0057A8", text: "#fff" },
+  "Metro":           { bg: "#6B21A8", text: "#fff" },
+  "Puma":            { bg: "#1D1D1B", text: "#FFD700" },
+  "Mobil":           { bg: "#0033A0", text: "#fff" },
+  "EG Ampol":        { bg: "#E8002D", text: "#fff" },
+  "Costco":          { bg: "#005DAA", text: "#fff" },
+  "FTR":             { bg: "#374151", text: "#fff" },
+};
+
+function BrandBadge({ brand }: { brand: string | null }) {
+  const key = Object.keys(BRAND_COLORS).find(k => brand?.includes(k)) ?? "";
+  const colors = BRAND_COLORS[key] ?? { bg: "#374151", text: "#fff" };
+  const initial = (brand ?? "?").charAt(0).toUpperCase();
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: 28, height: 28, borderRadius: "50%",
+      background: colors.bg, color: colors.text,
+      fontSize: 12, fontWeight: 700, flexShrink: 0,
+    }}>{initial}</span>
+  );
+}
+
 // ── StatsBar ──────────────────────────────────────────────────
 function StatsBar({ stats }: { stats: ReturnType<typeof useFuelStats> }) {
   if (!stats) return <div className="stats-bar">Loading stats...</div>;
@@ -50,7 +96,11 @@ function Leaderboard({ title, stations, min, max, onSelect }: {
       {stations.map((s, i) => (
         <div key={s.id} className="lb-row" onClick={() => onSelect(s)} style={{ cursor: "pointer" }}>
           <span className="lb-rank">#{i + 1}</span>
-          <span className="lb-name">{s.name}</span>
+          <BrandBadge brand={s.brand} />
+          <span className="lb-info">
+            <span className="lb-name">{s.name}</span>
+            <span className="lb-suburb">{parseSuburbState(s.address)}</span>
+          </span>
           <span className="lb-price" style={{ color: priceColor(s.price_cents, min, max) }}>
             {formatPrice(s.price_cents)}
           </span>
