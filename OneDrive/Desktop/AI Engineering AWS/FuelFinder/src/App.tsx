@@ -776,8 +776,8 @@ export default function App() {
               />
               <Leaderboard
                 icon="⭐"
-                title="Best Value"
-                subtitle={`Cheap + close${radiusKm ? ` within ${radiusKm}km` : ""}`}
+                title="Cheapest & Nearest"
+                subtitle={`Best price + distance${radiusKm ? ` within ${radiusKm}km` : ""}`}
                 stations={bestValue}
                 min={min} max={max}
                 accentColor="#3b82f6"
