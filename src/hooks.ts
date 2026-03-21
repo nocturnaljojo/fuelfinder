@@ -8,23 +8,42 @@ export type LocationPreset = {
   name: string;
   lat: number;
   lng: number;
-  region: "ACT" | "Regional NSW" | "Tasmania";
+  region: string;  // open string — add new regions freely in PRESET_LOCATIONS
 };
 
+// Display order for region groups in the sidebar
+export const PRESET_REGIONS: { name: string; icon: string }[] = [
+  { name: "Canberra & ACT",     icon: "🏛️" },
+  { name: "Southern Tablelands", icon: "🌾" },
+  { name: "Snowy Mountains",    icon: "⛰️" },
+  { name: "South Coast NSW",    icon: "🌊" },
+  { name: "Tasmania",           icon: "🍎" },
+];
+
 export const PRESET_LOCATIONS: LocationPreset[] = [
-  // ACT
-  { name: "Canberra CBD",   lat: -35.2809, lng: 149.1300, region: "ACT" },
-  { name: "Belconnen",      lat: -35.2350, lng: 149.0680, region: "ACT" },
-  { name: "Gungahlin",      lat: -35.1833, lng: 149.1333, region: "ACT" },
-  { name: "Woden",          lat: -35.3475, lng: 149.0860, region: "ACT" },
-  { name: "Tuggeranong",    lat: -35.4244, lng: 149.0690, region: "ACT" },
-  { name: "Queanbeyan",     lat: -35.3533, lng: 149.2344, region: "ACT" },
-  // Regional NSW
-  { name: "Yass",           lat: -34.8433, lng: 148.9097, region: "Regional NSW" },
-  { name: "Goulburn",       lat: -34.7533, lng: 149.7183, region: "Regional NSW" },
-  { name: "Cooma",          lat: -36.2358, lng: 149.1247, region: "Regional NSW" },
-  { name: "Batemans Bay",   lat: -35.7083, lng: 150.1742, region: "Regional NSW" },
-  // Tasmania
+  // ── Canberra & ACT ──────────────────────────────────────────
+  { name: "Canberra CBD",   lat: -35.2809, lng: 149.1300, region: "Canberra & ACT" },
+  { name: "Belconnen",      lat: -35.2350, lng: 149.0680, region: "Canberra & ACT" },
+  { name: "Gungahlin",      lat: -35.1833, lng: 149.1333, region: "Canberra & ACT" },
+  { name: "Woden",          lat: -35.3475, lng: 149.0860, region: "Canberra & ACT" },
+  { name: "Tuggeranong",    lat: -35.4244, lng: 149.0690, region: "Canberra & ACT" },
+  { name: "Queanbeyan",     lat: -35.3533, lng: 149.2344, region: "Canberra & ACT" },
+
+  // ── Southern Tablelands ─────────────────────────────────────
+  { name: "Yass",           lat: -34.8433, lng: 148.9097, region: "Southern Tablelands" },
+  { name: "Goulburn",       lat: -34.7533, lng: 149.7183, region: "Southern Tablelands" },
+  { name: "Braidwood",      lat: -35.4500, lng: 149.8000, region: "Southern Tablelands" },
+
+  // ── Snowy Mountains ─────────────────────────────────────────
+  { name: "Cooma",          lat: -36.2358, lng: 149.1247, region: "Snowy Mountains" },
+  { name: "Jindabyne",      lat: -36.4167, lng: 148.6333, region: "Snowy Mountains" },
+
+  // ── South Coast NSW ─────────────────────────────────────────
+  { name: "Batemans Bay",   lat: -35.7083, lng: 150.1742, region: "South Coast NSW" },
+  { name: "Nowra",          lat: -34.8833, lng: 150.6000, region: "South Coast NSW" },
+  { name: "Ulladulla",      lat: -35.3607, lng: 150.4729, region: "South Coast NSW" },
+
+  // ── Tasmania ────────────────────────────────────────────────
   { name: "Hobart",         lat: -42.8821, lng: 147.3272, region: "Tasmania" },
   { name: "Launceston",     lat: -41.4332, lng: 147.1441, region: "Tasmania" },
   { name: "Devonport",      lat: -41.1803, lng: 146.3497, region: "Tasmania" },
