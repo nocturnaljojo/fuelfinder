@@ -695,6 +695,35 @@ export default function App() {
 
         {error && <div className="error-banner">⚠️ {error}</div>}
 
+        {/* ── Quick filter strip (mobile) ──────────────────────
+            Always-visible fuel type + radius chips above the map.
+            Eliminates the need to open the sidebar for common actions. */}
+        <div className="quick-filter-bar">
+          <div className="qfb-scroll">
+            {/* Fuel type section */}
+            <span className="qfb-label">⛽</span>
+            {FUEL_TYPES.map(ft => (
+              <button
+                key={ft}
+                className={`qfb-chip${fuelType === ft ? " qfb-chip--active" : ""}`}
+                onClick={() => setFuelType(ft)}
+              >{ft}</button>
+            ))}
+
+            <div className="qfb-divider" />
+
+            {/* Radius section */}
+            <span className="qfb-label">📍</span>
+            {RADIUS_OPTIONS.map(r => (
+              <button
+                key={r.label}
+                className={`qfb-chip${radiusKm === r.value ? " qfb-chip--active" : ""}`}
+                onClick={() => setRadiusKm(r.value)}
+              >{r.label}</button>
+            ))}
+          </div>
+        </div>
+
         {/* Map */}
         <div className="map-container">
           <FuelMap
