@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useUser } from "@clerk/clerk-react";
 import { supabase } from "./supabaseClient";
 import type { Station, FuelType, FuelStats, CurrentPriceRow } from "./types/fuel";
 
@@ -119,6 +120,20 @@ export function useStations(
   return { stations, loading, error, lastRefresh, refetch: fetchStations };
 }
 
+// ── usePriceHistory + last-changed ───────────────────────────
+// Returns how stale a price is (hours since recorded_at)
+export function getPriceAgeHours(recordedAt: string): number {
+  return (Date.now() - new Date(recordedAt).getTime()) / 1000 / 60 / 60;
+}
+
+// Freshness label + colour based on age
+export function getFreshness(ageHours: number): { label: string; color: string; warning: boolean } {
+  if (ageHours < 6)  return { label: "Fresh",        color: "#22c55e", warning: false };
+  if (ageHours < 24) return { label: "Recent",        color: "#f59e0b", warning: false };
+  if (ageHours < 48) return { label: "Getting stale", color: "#f97316", warning: true  };
+  return               { label: "Possibly closed",  color: "#ef4444", warning: true  };
+}
+
 // ── usePriceHistory ───────────────────────────────────────────
 export interface PricePoint {
   date: string;       // "2024-03-22"
@@ -127,12 +142,16 @@ export interface PricePoint {
 }
 
 export function usePriceHistory(stationId: number | null, fuelType: string) {
-  const [history, setHistory] = useState<PricePoint[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [history, setHistory]               = useState<PricePoint[]>([]);
+  const [loading, setLoading]               = useState(false);
+  const [lastChangedAt, setLastChangedAt]   = useState<string | null>(null);
+  const [unchangedHours, setUnchangedHours] = useState<number | null>(null);
 
   useEffect(() => {
     if (!stationId) return;
     setLoading(true);
+    setLastChangedAt(null);
+    setUnchangedHours(null);
 
     const since = new Date();
     since.setDate(since.getDate() - 30);
@@ -145,9 +164,11 @@ export function usePriceHistory(stationId: number | null, fuelType: string) {
       .gte("recorded_at", since.toISOString())
       .order("recorded_at", { ascending: true })
       .then(({ data }) => {
+        const rows = data ?? [];
+
         // Group by day — keep last reading of each day
         const byDay = new Map<string, number>();
-        for (const row of data ?? []) {
+        for (const row of rows) {
           const day = row.recorded_at.slice(0, 10);
           byDay.set(day, row.price_cents);
         }
@@ -160,11 +181,70 @@ export function usePriceHistory(stationId: number | null, fuelType: string) {
             }),
           }))
         );
+
+        // Find when price last CHANGED — walk backwards until value differs
+        if (rows.length > 0) {
+          const currentPrice = rows[rows.length - 1].price_cents;
+          // Start from the end; find first row where price differs from current
+          let firstRowAtCurrentPrice = rows[rows.length - 1];
+          for (let i = rows.length - 2; i >= 0; i--) {
+            if (rows[i].price_cents !== currentPrice) break;
+            firstRowAtCurrentPrice = rows[i];
+          }
+          setLastChangedAt(firstRowAtCurrentPrice.recorded_at);
+          setUnchangedHours(
+            (Date.now() - new Date(firstRowAtCurrentPrice.recorded_at).getTime()) / 1000 / 60 / 60
+          );
+        }
+
         setLoading(false);
       });
   }, [stationId, fuelType]);
 
-  return { history, loading };
+  return { history, loading, lastChangedAt, unchangedHours };
+}
+
+// ── useEngagementGate ─────────────────────────────────────────
+// Shows a sign-up prompt after GATE_THRESHOLD station views.
+// After dismissing, re-shows after REDISPLAY_AFTER more views.
+// Signed-in users never see the gate.
+const GATE_THRESHOLD  = 5;   // first trigger
+const REDISPLAY_AFTER = 3;   // re-show after this many views post-dismiss
+
+export function useEngagementGate() {
+  const { isSignedIn } = useUser();
+  const [showGate, setShowGate] = useState(false);
+
+  // Clear gate state when user signs in
+  useEffect(() => {
+    if (isSignedIn) {
+      setShowGate(false);
+      localStorage.removeItem("ff_views");
+      localStorage.removeItem("ff_gate_dismissed_at");
+    }
+  }, [isSignedIn]);
+
+  function recordView() {
+    if (isSignedIn) return;
+
+    const views       = parseInt(localStorage.getItem("ff_views") ?? "0") + 1;
+    const dismissedAt = parseInt(localStorage.getItem("ff_gate_dismissed_at") ?? "0");
+    localStorage.setItem("ff_views", String(views));
+
+    if (views >= GATE_THRESHOLD) {
+      if (dismissedAt === 0 || views >= dismissedAt + REDISPLAY_AFTER) {
+        setShowGate(true);
+      }
+    }
+  }
+
+  function dismissGate() {
+    const views = parseInt(localStorage.getItem("ff_views") ?? "0");
+    localStorage.setItem("ff_gate_dismissed_at", String(views));
+    setShowGate(false);
+  }
+
+  return { showGate, recordView, dismissGate };
 }
 
 // ── useCheapestAndPriciest ────────────────────────────────────
