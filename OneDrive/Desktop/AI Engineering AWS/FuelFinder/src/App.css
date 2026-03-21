@@ -154,6 +154,18 @@ body {
 .sidebar-loc-btn.active { color: var(--accent); font-weight: 500; background: rgba(59,130,246,0.08); }
 .sidebar-loc-btn.gps-btn { color: var(--accent); margin-bottom: 6px; font-weight: 500; }
 
+/* Region divider inside a state group */
+.preset-region-group { margin-bottom: 4px; }
+.preset-region-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 8px 8px 3px;
+  opacity: 0.6;
+}
+
 /* ── Location autocomplete search ────────────────────────── */
 .location-search-wrap {
   position: relative;

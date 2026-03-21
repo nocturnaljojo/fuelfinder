@@ -7,7 +7,7 @@ import {
   useFuelStats,
   useEngagementGate,
   PRESET_LOCATIONS,
-  PRESET_REGIONS,
+  PRESET_STATES,
   getPriceAgeHours,
   getFreshness,
 } from "./hooks";
@@ -309,8 +309,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Collapsible location sections — Canberra & ACT open by default
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["Canberra & ACT"]));
+  // Collapsible state sections — ACT open by default
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["ACT"]));
   function toggleSection(name: string) {
     setOpenSections(prev => {
       const next = new Set(prev);
@@ -568,23 +568,36 @@ export default function App() {
                 )}
               </div>
 
-              {/* Collapsible preset groups — driven by PRESET_REGIONS order */}
-              {PRESET_REGIONS.map(({ name: region, icon }) => (
-                <CollapsibleGroup
-                  key={region}
-                  label={`${icon} ${region}`}
-                  open={openSections.has(region)}
-                  onToggle={() => toggleSection(region)}
-                >
-                  {PRESET_LOCATIONS.filter(p => p.region === region).map(p => (
-                    <button
-                      key={p.name}
-                      className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
-                      onClick={() => selectPreset(p)}
-                    >{p.name}</button>
-                  ))}
-                </CollapsibleGroup>
-              ))}
+              {/* 2-level hierarchy: State (collapsible) → Region (divider) → Town (button) */}
+              {PRESET_STATES.map(({ code, label, icon }) => {
+                const stateLocs = PRESET_LOCATIONS.filter(p => p.state === code);
+                // Unique regions in the order they first appear
+                const regions = [...new Map(stateLocs.map(p => [p.region, p.region])).keys()];
+                return (
+                  <CollapsibleGroup
+                    key={code}
+                    label={`${icon} ${label}`}
+                    open={openSections.has(code)}
+                    onToggle={() => toggleSection(code)}
+                  >
+                    {regions.map(region => (
+                      <div key={region} className="preset-region-group">
+                        {/* Region label — visual divider only, not clickable */}
+                        {regions.length > 1 && (
+                          <div className="preset-region-label">{region}</div>
+                        )}
+                        {stateLocs.filter(p => p.region === region).map(p => (
+                          <button
+                            key={p.name}
+                            className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
+                            onClick={() => selectPreset(p)}
+                          >{p.name}</button>
+                        ))}
+                      </div>
+                    ))}
+                  </CollapsibleGroup>
+                );
+              })}
             </div>
 
             {/* ── Fuel Type ── */}
