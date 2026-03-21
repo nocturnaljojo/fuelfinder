@@ -5,49 +5,46 @@ import type { Station, FuelType, FuelStats, CurrentPriceRow } from "./types/fuel
 
 // ── Preset locations ──────────────────────────────────────────
 export type LocationPreset = {
-  name: string;
-  lat: number;
-  lng: number;
-  region: string;  // open string — add new regions freely in PRESET_LOCATIONS
+  name:   string;
+  lat:    number;
+  lng:    number;
+  state:  string;   // top-level collapsible — "ACT" | "NSW" | "TAS" …
+  region: string;   // non-interactive divider label within the state
 };
 
-// Display order for region groups in the sidebar
-export const PRESET_REGIONS: { name: string; icon: string }[] = [
-  { name: "Canberra & ACT",     icon: "🏛️" },
-  { name: "Southern Tablelands", icon: "🌾" },
-  { name: "Snowy Mountains",    icon: "⛰️" },
-  { name: "South Coast NSW",    icon: "🌊" },
-  { name: "Tasmania",           icon: "🍎" },
+// States shown in order — add new states here as coverage expands
+export const PRESET_STATES: { code: string; label: string; icon: string }[] = [
+  { code: "ACT", label: "Australian Capital Territory", icon: "🏛️" },
+  { code: "NSW", label: "New South Wales",              icon: "💙" },
+  { code: "TAS", label: "Tasmania",                    icon: "🍎" },
 ];
 
 export const PRESET_LOCATIONS: LocationPreset[] = [
-  // ── Canberra & ACT ──────────────────────────────────────────
-  { name: "Canberra CBD",   lat: -35.2809, lng: 149.1300, region: "Canberra & ACT" },
-  { name: "Belconnen",      lat: -35.2350, lng: 149.0680, region: "Canberra & ACT" },
-  { name: "Gungahlin",      lat: -35.1833, lng: 149.1333, region: "Canberra & ACT" },
-  { name: "Woden",          lat: -35.3475, lng: 149.0860, region: "Canberra & ACT" },
-  { name: "Tuggeranong",    lat: -35.4244, lng: 149.0690, region: "Canberra & ACT" },
-  { name: "Queanbeyan",     lat: -35.3533, lng: 149.2344, region: "Canberra & ACT" },
+  // ── ACT ─────────────────────────────────────────────────────
+  { name: "Canberra CBD",  lat: -35.2809, lng: 149.1300, state: "ACT", region: "Canberra" },
+  { name: "Belconnen",     lat: -35.2350, lng: 149.0680, state: "ACT", region: "Canberra" },
+  { name: "Gungahlin",     lat: -35.1833, lng: 149.1333, state: "ACT", region: "Canberra" },
+  { name: "Woden",         lat: -35.3475, lng: 149.0860, state: "ACT", region: "Canberra" },
+  { name: "Tuggeranong",   lat: -35.4244, lng: 149.0690, state: "ACT", region: "Canberra" },
+  { name: "Queanbeyan",    lat: -35.3533, lng: 149.2344, state: "ACT", region: "Queanbeyan–Palerang" },
 
-  // ── Southern Tablelands ─────────────────────────────────────
-  { name: "Yass",           lat: -34.8433, lng: 148.9097, region: "Southern Tablelands" },
-  { name: "Goulburn",       lat: -34.7533, lng: 149.7183, region: "Southern Tablelands" },
-  { name: "Braidwood",      lat: -35.4500, lng: 149.8000, region: "Southern Tablelands" },
+  // ── NSW ─────────────────────────────────────────────────────
+  { name: "Yass",          lat: -34.8433, lng: 148.9097, state: "NSW", region: "Southern Tablelands" },
+  { name: "Goulburn",      lat: -34.7533, lng: 149.7183, state: "NSW", region: "Southern Tablelands" },
+  { name: "Braidwood",     lat: -35.4500, lng: 149.8000, state: "NSW", region: "Southern Tablelands" },
 
-  // ── Snowy Mountains ─────────────────────────────────────────
-  { name: "Cooma",          lat: -36.2358, lng: 149.1247, region: "Snowy Mountains" },
-  { name: "Jindabyne",      lat: -36.4167, lng: 148.6333, region: "Snowy Mountains" },
+  { name: "Cooma",         lat: -36.2358, lng: 149.1247, state: "NSW", region: "Snowy Mountains" },
+  { name: "Jindabyne",     lat: -36.4167, lng: 148.6333, state: "NSW", region: "Snowy Mountains" },
 
-  // ── South Coast NSW ─────────────────────────────────────────
-  { name: "Batemans Bay",   lat: -35.7083, lng: 150.1742, region: "South Coast NSW" },
-  { name: "Nowra",          lat: -34.8833, lng: 150.6000, region: "South Coast NSW" },
-  { name: "Ulladulla",      lat: -35.3607, lng: 150.4729, region: "South Coast NSW" },
+  { name: "Batemans Bay",  lat: -35.7083, lng: 150.1742, state: "NSW", region: "South Coast" },
+  { name: "Nowra",         lat: -34.8833, lng: 150.6000, state: "NSW", region: "South Coast" },
+  { name: "Ulladulla",     lat: -35.3607, lng: 150.4729, state: "NSW", region: "South Coast" },
 
-  // ── Tasmania ────────────────────────────────────────────────
-  { name: "Hobart",         lat: -42.8821, lng: 147.3272, region: "Tasmania" },
-  { name: "Launceston",     lat: -41.4332, lng: 147.1441, region: "Tasmania" },
-  { name: "Devonport",      lat: -41.1803, lng: 146.3497, region: "Tasmania" },
-  { name: "Burnie",         lat: -41.0553, lng: 145.9041, region: "Tasmania" },
+  // ── TAS ─────────────────────────────────────────────────────
+  { name: "Hobart",        lat: -42.8821, lng: 147.3272, state: "TAS", region: "Greater Hobart" },
+  { name: "Launceston",    lat: -41.4332, lng: 147.1441, state: "TAS", region: "Northern Tasmania" },
+  { name: "Devonport",     lat: -41.1803, lng: 146.3497, state: "TAS", region: "Northern Tasmania" },
+  { name: "Burnie",        lat: -41.0553, lng: 145.9041, state: "TAS", region: "Northern Tasmania" },
 ];
 
 // Parliament House — default GPS fallback
