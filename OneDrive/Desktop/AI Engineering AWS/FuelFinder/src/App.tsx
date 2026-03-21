@@ -448,7 +448,21 @@ export default function App() {
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className={`sidebar${sidebarCollapsed ? " sidebar--collapsed" : ""}${mobileSidebarOpen ? " sidebar--open" : ""}`}>
 
-        {/* Logo + collapse toggle */}
+        {/* Mobile-only filter header (Carsales-style) */}
+        <div className="sidebar-mobile-header">
+          <button
+            className="sidebar-mobile-close"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-label="Close filters"
+          >✕</button>
+          <span className="sidebar-mobile-title">Filters</span>
+          <button
+            className="sidebar-mobile-done"
+            onClick={() => setMobileSidebarOpen(false)}
+          >Show {sorted.length} results</button>
+        </div>
+
+        {/* Desktop logo + collapse toggle */}
         <div className="sidebar-logo">
           {!sidebarCollapsed && (
             <>

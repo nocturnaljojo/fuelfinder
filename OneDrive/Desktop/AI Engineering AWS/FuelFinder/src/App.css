@@ -335,11 +335,18 @@ body {
   font-size: 11px; font-weight: 700; flex-shrink: 0;
 }
 
-/* Mobile overlay */
+/* Mobile overlay — must be above Leaflet (z-index 1000+) */
 .sidebar-overlay {
   display: none;
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.5); z-index: 49;
+  background: rgba(0,0,0,0.6);
+  z-index: 1099;
+  backdrop-filter: blur(2px);
+}
+
+/* Mobile filter header (hidden on desktop) */
+.sidebar-mobile-header {
+  display: none;
 }
 
 /* ── Main panel ───────────────────────────────────────────── */
@@ -1072,15 +1079,70 @@ body {
   /* ── Core layout ── */
   .app-layout { flex-direction: column; height: 100vh; }
 
-  /* Sidebar: off-canvas drawer */
+  /* Sidebar: full-screen filter overlay above the map and everything else.
+     Leaflet internals go up to z-index ~1000, so we need 1100+. */
   .sidebar {
-    position: fixed; top: 0; left: 0; height: 100vh;
-    transform: translateX(-100%); transition: transform 0.25s ease;
-    z-index: 50; width: min(82vw, 320px);
+    position: fixed;
+    inset: 0;                        /* full screen — no map bleed-through */
+    width: 100%;
+    height: 100%;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1100;                   /* above Leaflet map, markers, overlays */
+    overflow-y: auto;
+    border-right: none;
   }
-  .sidebar--open   { transform: translateX(0); }
-  .sidebar--collapsed { width: min(82vw, 320px); } /* no collapse icon on mobile */
-  .sidebar-overlay { display: block; }
+  .sidebar--open      { transform: translateX(0); }
+  .sidebar--collapsed { width: 100%; transform: translateX(-100%); }
+  .sidebar-overlay    { display: block; z-index: 1099; }
+
+  /* Mobile filter header — visible only on mobile */
+  .sidebar-mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    padding-top: max(14px, env(safe-area-inset-top, 14px));
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  .sidebar-mobile-close {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text);
+    width: 36px; height: 36px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sidebar-mobile-title {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .sidebar-mobile-done {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Hide desktop logo on mobile (we have the mobile header above) */
+  .sidebar-logo      { display: none; }
+  .sidebar-collapse-btn { display: none; }
 
   /* ── Topbar ── */
   .hamburger { display: flex; }
