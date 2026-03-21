@@ -148,28 +148,120 @@ body {
 .sidebar-loc-btn.active { color: var(--accent); font-weight: 500; background: rgba(59,130,246,0.08); }
 .sidebar-loc-btn.gps-btn { color: var(--accent); margin-bottom: 6px; font-weight: 500; }
 
-/* Location search */
-.location-search-form {
-  display: flex; gap: 6px; margin-bottom: 10px;
+/* ── Location autocomplete search ────────────────────────── */
+.location-search-wrap {
+  position: relative;
+  margin-bottom: 10px;
 }
+
+.location-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
 .location-search-input {
-  flex: 1; min-width: 0;
+  flex: 1; min-width: 0; width: 100%;
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; color: var(--text);
-  font-size: 12px; padding: 6px 10px; outline: none;
+  font-size: 12px; padding: 7px 32px 7px 10px; outline: none;
   transition: border-color 0.15s;
 }
 .location-search-input::placeholder { color: var(--muted); }
 .location-search-input:focus { border-color: var(--accent); }
-.location-search-btn {
-  background: var(--accent); color: #fff;
-  border: none; border-radius: 6px;
-  padding: 6px 10px; font-size: 12px; font-weight: 600;
-  cursor: pointer; flex-shrink: 0;
-  transition: opacity 0.15s;
+
+/* Spinning loader inside the input */
+.location-search-spinner {
+  position: absolute;
+  right: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+  animation: spin-simple 0.8s linear infinite;
 }
-.location-search-btn:disabled { opacity: 0.4; cursor: default; }
-.location-search-error { font-size: 11px; color: var(--red); margin-top: -6px; margin-bottom: 6px; line-height: 1.4; }
+@keyframes spin-simple { to { transform: rotate(360deg); } }
+
+/* Clear ✕ button */
+.location-search-clear {
+  position: absolute;
+  right: 7px;
+  background: none; border: none;
+  color: var(--muted); font-size: 11px;
+  cursor: pointer; padding: 2px 3px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.location-search-clear:hover { color: var(--text); }
+
+/* Dropdown list */
+.location-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  list-style: none;
+  margin: 0; padding: 4px;
+  z-index: 999;
+  overflow: hidden;
+  animation: suggest-in 0.12s ease;
+}
+
+@keyframes suggest-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Each suggestion row */
+.location-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.location-suggestion-item:hover {
+  background: rgba(59,130,246,0.12);
+}
+.location-suggestion-item + .location-suggestion-item {
+  border-top: 1px solid var(--border);
+}
+
+.suggestion-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.suggestion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.suggestion-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-meta {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Collapsible groups */
 .collapsible-group { margin-top: 4px; }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import {
   useGeolocation,
@@ -38,6 +38,44 @@ function parseSuburbState(address: string | null): string {
   const state = words[words.length - 1];
   const suburb = words.slice(0, -1).map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
   return suburb && state ? `${suburb} · ${state}` : withoutPostcode;
+}
+
+// ── Nominatim result type ─────────────────────────────────────
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+  address: {
+    suburb?:    string;
+    town?:      string;
+    city?:      string;
+    village?:   string;
+    state?:     string;
+    postcode?:  string;
+  };
+}
+
+const STATE_ABBR: Record<string, string> = {
+  "Australian Capital Territory": "ACT",
+  "New South Wales":              "NSW",
+  "Victoria":                     "VIC",
+  "Queensland":                   "QLD",
+  "South Australia":              "SA",
+  "Western Australia":            "WA",
+  "Tasmania":                     "TAS",
+  "Northern Territory":           "NT",
+};
+
+function formatNominatim(r: NominatimResult): { name: string; meta: string } {
+  const parts  = r.display_name.split(",").map(s => s.trim());
+  const name   = parts[0];
+  const state  = r.address.state ?? "";
+  const abbr   = STATE_ABBR[state] || state;
+  const post   = r.address.postcode ? ` ${r.address.postcode}` : "";
+  // Second breadcrumb — suburb or LGA name
+  const area   = r.address.suburb || r.address.town || r.address.city || parts[1] || "";
+  const meta   = [area !== name ? area : "", abbr + post].filter(Boolean).join(", ");
+  return { name, meta };
 }
 
 // ── Brand badge ───────────────────────────────────────────────
@@ -226,9 +264,12 @@ export default function App() {
   const [locationName, setLocationName] = useState("My Location");
   const [manualCoords, setManualCoords] = useState<[number, number] | null>(null);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
-  const [manualInput, setManualInput]       = useState("");
-  const [geocodeLoading, setGeocodeLoading] = useState(false);
-  const [geocodeError, setGeocodeError]     = useState<string | null>(null);
+  const [manualInput, setManualInput]         = useState("");
+  const [suggestions, setSuggestions]         = useState<NominatimResult[]>([]);
+  const [suggestLoading, setSuggestLoading]   = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -301,31 +342,58 @@ export default function App() {
     if (preset.region === "Regional NSW" || preset.region === "Tasmania") setRadiusKm(50);
   }
 
-  async function handleManualEntry(e: React.FormEvent) {
-    e.preventDefault();
-    const query = manualInput.trim();
-    if (!query) return;
-    setGeocodeLoading(true);
-    setGeocodeError(null);
+  // Debounced suburb search — fires 350ms after the user stops typing
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    setSuggestLoading(true);
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ", Australia")}&format=json&limit=1&countrycodes=au`;
-      const res = await fetch(url, { headers: { "Accept-Language": "en" } });
-      const results = await res.json();
-      if (!results.length) {
-        setGeocodeError(`"${query}" not found — try a suburb, town or postcode`);
-      } else {
-        const { lat, lon, display_name } = results[0];
-        setManualCoords([parseFloat(lat), parseFloat(lon)]);
-        setLocationName(display_name.split(",")[0].trim());
-        setManualInput("");
-        setMobileSidebarOpen(false);
-      }
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ", Australia")}&format=json&limit=7&addressdetails=1&countrycodes=au&featuretype=settlement`;
+      const res  = await fetch(url, { headers: { "Accept-Language": "en" } });
+      const data: NominatimResult[] = await res.json();
+      setSuggestions(data);
+      setShowSuggestions(data.length > 0);
     } catch {
-      setGeocodeError("Could not reach location service — check your connection");
+      setSuggestions([]);
     } finally {
-      setGeocodeLoading(false);
+      setSuggestLoading(false);
+    }
+  }, []);
+
+  function handleSearchInput(value: string) {
+    setManualInput(value);
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (value.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    suggestTimer.current = setTimeout(() => fetchSuggestions(value.trim()), 350);
+  }
+
+  function handleSuggestionClick(result: NominatimResult) {
+    const { name } = formatNominatim(result);
+    setManualCoords([parseFloat(result.lat), parseFloat(result.lon)]);
+    setLocationName(name);
+    setManualInput("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setMobileSidebarOpen(false);
+  }
+
+  function handleSearchKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") { setShowSuggestions(false); }
+    if (e.key === "Enter"  && suggestions.length > 0) {
+      e.preventDefault();
+      handleSuggestionClick(suggestions[0]);
     }
   }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function onOutsideClick(e: MouseEvent) {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", onOutsideClick);
+    return () => document.removeEventListener("mousedown", onOutsideClick);
+  }, []);
 
   const locationIsGPS     = manualCoords === null && !isDefault;
   const locationIsDefault = manualCoords === null && isDefault;
@@ -385,26 +453,52 @@ export default function App() {
                 🛰 Use my GPS
               </button>
 
-              {/* Search — directly under GPS */}
-              <form className="location-search-form" onSubmit={handleManualEntry}>
-                <input
-                  className="location-search-input"
-                  type="text"
-                  placeholder="Search suburb, town or postcode…"
-                  value={manualInput}
-                  onChange={e => { setManualInput(e.target.value); setGeocodeError(null); }}
-                  disabled={geocodeLoading}
-                  autoComplete="off"
-                />
-                <button
-                  className="location-search-btn"
-                  type="submit"
-                  disabled={geocodeLoading || !manualInput.trim()}
-                >
-                  {geocodeLoading ? "…" : "Go"}
-                </button>
-              </form>
-              {geocodeError && <div className="location-search-error">{geocodeError}</div>}
+              {/* Suburb autocomplete search */}
+              <div className="location-search-wrap" ref={searchWrapRef}>
+                <div className="location-search-row">
+                  <input
+                    className="location-search-input"
+                    type="text"
+                    placeholder="Search suburb, town or postcode…"
+                    value={manualInput}
+                    onChange={e => handleSearchInput(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  {suggestLoading && <span className="location-search-spinner">⟳</span>}
+                  {manualInput && (
+                    <button
+                      className="location-search-clear"
+                      onClick={() => { setManualInput(""); setSuggestions([]); setShowSuggestions(false); }}
+                      aria-label="Clear search"
+                    >✕</button>
+                  )}
+                </div>
+
+                {showSuggestions && suggestions.length > 0 && (
+                  <ul className="location-suggestions" role="listbox">
+                    {suggestions.map((r, i) => {
+                      const { name, meta } = formatNominatim(r);
+                      return (
+                        <li
+                          key={i}
+                          className="location-suggestion-item"
+                          role="option"
+                          onMouseDown={() => handleSuggestionClick(r)}
+                        >
+                          <span className="suggestion-icon">📍</span>
+                          <span className="suggestion-body">
+                            <span className="suggestion-name">{name}</span>
+                            {meta && <span className="suggestion-meta">{meta}</span>}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
 
               {/* Collapsible preset groups */}
               <CollapsibleGroup label="ACT" open={openSections.has("ACT")} onToggle={() => toggleSection("ACT")}>
