@@ -263,6 +263,69 @@ export function useEngagementGate() {
   return { showGate, recordView, dismissGate };
 }
 
+// ── useFuelTrends ─────────────────────────────────────────────
+// Fetches daily average prices per fuel type from price_history.
+// Calls the avg_price_by_fuel_daily RPC function.
+export interface FuelTrendRow {
+  date_key:  string;   // "2026-02-15"
+  fuel_type: string;
+  avg_price: number;
+}
+
+// A single data point in the recharts-friendly format
+export interface TrendPoint {
+  date:  string;   // "2026-02-15"
+  label: string;   // "15 Feb"
+  [fuel: string]: number | string;  // e.g. { U91: 239.9, Diesel: 212.0 }
+}
+
+export function useFuelTrends(daysBack: number = 90) {
+  const [points, setPoints]   = useState<TrendPoint[]>([]);
+  const [fuels, setFuels]     = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    supabase
+      .rpc("avg_price_by_fuel_daily", { days_back: daysBack })
+      .then(({ data, error }) => {
+        if (error || !data || data.length === 0) {
+          setPoints([]);
+          setFuels([]);
+          setLoading(false);
+          return;
+        }
+
+        const rows = data as FuelTrendRow[];
+
+        // Build recharts-friendly structure: one entry per day
+        const byDate = new Map<string, TrendPoint>();
+        const fuelSet = new Set<string>();
+
+        for (const row of rows) {
+          fuelSet.add(row.fuel_type);
+          if (!byDate.has(row.date_key)) {
+            byDate.set(row.date_key, {
+              date:  row.date_key,
+              label: new Date(row.date_key + "T12:00:00").toLocaleDateString([], {
+                day: "numeric", month: "short",
+              }),
+            });
+          }
+          byDate.get(row.date_key)![row.fuel_type] = Number(row.avg_price);
+        }
+
+        setPoints([...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
+        // Sort fuels by typical price order
+        const fuelOrder = ["U91","E10","P95","P98","Diesel","Premium Diesel","LPG"];
+        setFuels([...fuelSet].sort((a, b) => fuelOrder.indexOf(a) - fuelOrder.indexOf(b)));
+        setLoading(false);
+      });
+  }, [daysBack]);
+
+  return { points, fuels, loading };
+}
+
 // ── useFavourites ─────────────────────────────────────────────
 // Syncs a user's starred stations with Supabase.
 // Works with Clerk user IDs stored as plain TEXT in favourite_stations.
