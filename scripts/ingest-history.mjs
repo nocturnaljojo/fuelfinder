@@ -1,206 +1,161 @@
 /**
  * FuelFinder — 2-Month Historical Data Ingest
- * ─────────────────────────────────────────────────────────────
- * Pulls quarterly CSV files from NSW Open Data (data.nsw.gov.au),
- * matches stations to your Supabase DB, and bulk-inserts into
- * the price_history table.
- *
- * SETUP (run once):
- *   1. Get your Service Role key from:
- *      Supabase → Project Settings → API → service_role (secret)
- *
- *   2. Create a .env.local file in the project root with:
- *      VITE_SUPABASE_URL=https://xxxx.supabase.co
- *      SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5...
- *
- *   3. Run:
- *      node scripts/ingest-history.mjs
- *
- * The script is safe to re-run — it skips rows already in the DB.
- * ─────────────────────────────────────────────────────────────
+ * Uses the NSW Open Data DataStore API — no CSV download required.
+ * Run with:  node scripts/ingest-history.mjs
  */
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
-import { resolve, dirname } from "path";
+import { readFile } from "fs/promises";
+import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
+import * as XLSX from "xlsx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ── Load environment variables from .env.local ───────────────
+// ── Load .env or .env.local ───────────────────────────────────
 function loadEnv() {
-  const envPath = resolve(__dirname, "../.env.local");
-  if (!existsSync(envPath)) {
-    console.error("❌  Missing .env.local — see SETUP instructions at the top of this file.");
-    process.exit(1);
-  }
+  const candidates = ["../.env.local", "../.env"].map(p => resolve(__dirname, p));
+  const envPath = candidates.find(p => existsSync(p));
+  if (!envPath) { console.error("❌  No .env file found."); process.exit(1); }
+  console.log(`   Using env: ${envPath.split(/[\\/]/).pop()}`);
   for (const line of readFileSync(envPath, "utf8").split("\n")) {
-    const [key, ...val] = line.split("=");
-    if (key && val.length) process.env[key.trim()] = val.join("=").trim();
+    const eqIdx = line.indexOf("=");
+    if (eqIdx < 1) continue;
+    const key = line.slice(0, eqIdx).trim();
+    const val = line.slice(eqIdx + 1).trim();
+    if (key && !process.env[key]) process.env[key] = val;
   }
 }
 loadEnv();
 
-const SUPABASE_URL      = process.env.VITE_SUPABASE_URL;
-const SUPABASE_SVCKEY   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL    = process.env.VITE_SUPABASE_URL;
+const SUPABASE_SVCKEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+                     ?? process.env.VITE_SUPABASE_SERVICE_ROLE_SECRET
+                     ?? process.env.SUPABASE_SERVICE_ROLE_SECRET;
 
 if (!SUPABASE_URL || !SUPABASE_SVCKEY) {
-  console.error("❌  VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local");
+  console.error("❌  Missing VITE_SUPABASE_URL or service role key in .env");
   process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SVCKEY);
 
-// ── Config ────────────────────────────────────────────────────
-const MONTHS_BACK  = 2;                         // how far back to import
-const BATCH_SIZE   = 500;                        // rows per Supabase insert
-const CKAN_API     = "https://data.nsw.gov.au/api/3/action/package_show?id=fuel-check";
+// ── NSW DataStore resource IDs (verified accessible) ─────────
+// Source: data.nsw.gov.au/data/dataset/fuel-check
+// Note: Nov 2025, Dec 2025, Jan 2026 are XLSX-only (not in DataStore)
+const RESOURCES = [
+  { name: "September 2025", id: "e12a757e-a9fe-4cbe-9034-55f00314c72b" },
+  { name: "October 2025",   id: "c5ae66f9-9324-49b9-8f90-07cd6eb12d42" },
+  { name: "February 2026",  id: "3786820f-8efd-4b13-b2ba-56096a9d42b3" },
+];
 
-// NSW FuelCode → our DB fuel_type values
+const DATASTORE_API = "https://data.nsw.gov.au/data/api/action/datastore_search";
+const PAGE_SIZE     = 1000;   // records per API page
+const BATCH_SIZE    = 500;    // rows per Supabase insert
+
+// NSW fuel code → our DB values
 const FUEL_MAP = {
-  U91: "U91",
-  E10: "E10",
-  P95: "P95",
-  P98: "P98",
-  DL:  "Diesel",
-  PDL: "Premium Diesel",
-  LPG: "LPG",
+  U91: "U91",  E10: "E10",  P95: "P95",  P98: "P98",
+  DL:  "Diesel",  PDL: "Premium Diesel",  LPG: "LPG",
 };
 
-// ── Date cutoff — 2 months ago ────────────────────────────────
-const CUTOFF = new Date();
-CUTOFF.setMonth(CUTOFF.getMonth() - MONTHS_BACK);
-console.log(`\n📅  Importing prices from ${CUTOFF.toDateString()} → today`);
-
-// ── Step 1: Discover CSV download URLs via CKAN ───────────────
-async function getDownloadUrls() {
-  console.log("\n🔍  Looking up NSW Open Data resources…");
-  const res  = await fetch(CKAN_API);
-  const json = await res.json();
-
-  if (!json.success) throw new Error("CKAN API returned failure");
-
-  const resources = json.result.resources
-    .filter(r => r.format?.toUpperCase() === "CSV" || r.url?.toLowerCase().endsWith(".csv"))
-    .sort((a, b) => new Date(b.last_modified ?? 0) - new Date(a.last_modified ?? 0));
-
-  if (resources.length === 0) throw new Error("No CSV resources found on data.nsw.gov.au");
-
-  // Take the 2 most recent quarters (covers ~6 months → guaranteed 2 months of data)
-  const urls = resources.slice(0, 2).map(r => r.url);
-  console.log(`   Found ${resources.length} CSVs — downloading latest ${urls.length}:`);
-  urls.forEach(u => console.log(`   • ${u}`));
-  return urls;
-}
-
-// ── Step 2: Download CSV text ─────────────────────────────────
-async function downloadCsv(url) {
-  console.log(`\n⬇️   Downloading ${url.split("/").pop()}…`);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  const text = await res.text();
-  console.log(`   Downloaded ${(text.length / 1024 / 1024).toFixed(1)} MB`);
-  return text;
-}
-
-// ── Step 3: Parse CSV (no external deps — pure JS) ───────────
-function parseCsv(text) {
-  const lines  = text.split("\n");
-  const header = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
-  const rows   = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    // Handle quoted fields with commas inside
-    const fields = [];
-    let current  = "";
-    let inQuotes = false;
-    for (const ch of line) {
-      if (ch === '"') { inQuotes = !inQuotes; }
-      else if (ch === "," && !inQuotes) { fields.push(current.trim()); current = ""; }
-      else { current += ch; }
-    }
-    fields.push(current.trim());
-
-    const row = {};
-    header.forEach((h, idx) => { row[h] = (fields[idx] ?? "").replace(/^"|"$/g, "").trim(); });
-    rows.push(row);
-  }
-  return rows;
-}
-
-// ── Step 4: Load station lookup map from Supabase ────────────
+// ── Load station map from Supabase ────────────────────────────
 async function buildStationMap() {
   console.log("\n🗄️   Loading stations from Supabase…");
   const { data, error } = await supabase
     .from("stations")
     .select("id, name, suburb, api_station_id");
-
-  if (error) throw new Error(`Failed to load stations: ${error.message}`);
+  if (error) throw new Error(`Supabase error: ${error.message}`);
 
   const map = new Map();
   for (const s of data ?? []) {
-    // Match by api_station_id (most reliable)
-    if (s.api_station_id) map.set(`id:${s.api_station_id}`, s.id);
-
-    // Match by lowercase name + suburb (fallback)
-    const key = `${(s.name ?? "").toLowerCase()}|${(s.suburb ?? "").toLowerCase()}`;
-    map.set(key, s.id);
+    // 1. By api_station_id (most precise)
+    if (s.api_station_id) map.set(`api:${s.api_station_id}`, s.id);
+    // 2. By name + suburb
+    const nameNorm = (s.name ?? "").toLowerCase().trim();
+    const suburbNorm = (s.suburb ?? "").toLowerCase().trim();
+    if (suburbNorm) map.set(`${nameNorm}|${suburbNorm}`, s.id);
+    // 3. Name-only fallback (suburb is null in many DB rows)
+    if (!map.has(`name:${nameNorm}`)) map.set(`name:${nameNorm}`, s.id);
   }
-
-  console.log(`   Mapped ${data?.length ?? 0} stations`);
+  console.log(`   Mapped ${data?.length ?? 0} stations (name+suburb + name-only fallback)`);
   return map;
 }
 
-// ── Step 5: Process rows + collect inserts ────────────────────
-function processRows(rows, stationMap) {
-  let matched  = 0;
-  let skipped  = 0;
-  let tooOld   = 0;
-  const records = [];
+// ── Fetch all pages from one DataStore resource ───────────────
+async function fetchAllRecords(resourceId, resourceName) {
+  console.log(`\n📥  Fetching ${resourceName}…`);
+  const allRecords = [];
+  let offset = 0;
 
-  for (const row of rows) {
-    // ── Parse date ──
-    // NSW format: "15/01/2026 10:30:00"  or  ISO "2026-01-15T10:30:00"
-    let recordedAt;
-    const raw = row.PriceUpdatedDate ?? row.TransactionDateutc ?? "";
-    if (!raw) { skipped++; continue; }
+  // First call — get total count
+  const firstUrl = `${DATASTORE_API}?resource_id=${resourceId}&limit=${PAGE_SIZE}&offset=0`;
+  const firstRes = await fetch(firstUrl);
+  const firstJson = await firstRes.json();
+  if (!firstJson.success) throw new Error(`DataStore error for ${resourceName}`);
 
-    if (raw.includes("/")) {
-      const [datePart, timePart = "12:00:00"] = raw.split(" ");
-      const [d, m, y] = datePart.split("/");
-      recordedAt = new Date(`${y}-${m}-${d}T${timePart}`);
-    } else {
-      recordedAt = new Date(raw);
-    }
+  const total = firstJson.result.total;
+  allRecords.push(...firstJson.result.records);
+  offset += PAGE_SIZE;
 
-    if (isNaN(recordedAt.getTime())) { skipped++; continue; }
-    if (recordedAt < CUTOFF)         { tooOld++;  continue; }
+  const pages = Math.ceil(total / PAGE_SIZE);
+  process.stdout.write(`   Page 1/${pages} (${allRecords.length}/${total})\r`);
 
-    // ── Map fuel type ──
-    const fuelType = FUEL_MAP[row.FuelCode];
+  // Remaining pages
+  while (offset < total) {
+    const url = `${DATASTORE_API}?resource_id=${resourceId}&limit=${PAGE_SIZE}&offset=${offset}`;
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (!json.success) { console.warn(`   ⚠️  Page at offset ${offset} failed — skipping`); break; }
+    allRecords.push(...json.result.records);
+    offset += PAGE_SIZE;
+    const page = Math.ceil(offset / PAGE_SIZE);
+    process.stdout.write(`   Page ${page}/${pages} (${allRecords.length}/${total})\r`);
+    await new Promise(r => setTimeout(r, 80)); // be polite to the API
+  }
+
+  console.log(`   ✓ Fetched ${allRecords.length} records from ${resourceName}        `);
+  return allRecords;
+}
+
+// ── Map raw API records → price_history rows ──────────────────
+function mapRecords(records, stationMap) {
+  let matched = 0, skipped = 0;
+  const rows = [];
+
+  for (const rec of records) {
+    // Fuel type
+    const fuelType = FUEL_MAP[rec.FuelCode];
     if (!fuelType) { skipped++; continue; }
 
-    // ── Match station ──
-    // Try api_station_id first (ServiceStationCode column in newer CSVs)
-    let stationId = row.ServiceStationCode
-      ? stationMap.get(`id:${row.ServiceStationCode}`)
-      : undefined;
-
-    if (!stationId) {
-      const key = `${(row.ServiceStationName ?? "").toLowerCase()}|${(row.Suburb ?? "").toLowerCase()}`;
-      stationId = stationMap.get(key);
-    }
-
+    // Station match — try 3 strategies
+    const nameNorm   = (rec.ServiceStationName ?? "").toLowerCase().trim();
+    const suburbNorm = (rec.Suburb ?? "").toLowerCase().trim();
+    const stationId  =
+      stationMap.get(`${nameNorm}|${suburbNorm}`) ??   // name + suburb
+      stationMap.get(`name:${nameNorm}`);               // name-only fallback
     if (!stationId) { skipped++; continue; }
 
-    // ── Validate price ──
-    const price = parseFloat(row.Price);
+    // Price
+    const price = parseFloat(rec.Price);
     if (isNaN(price) || price < 50 || price > 600) { skipped++; continue; }
 
-    records.push({
+    // Date — may be a JS Date (cellDates:true), an Excel serial number, or a string
+    let recordedAt;
+    const rawDate = rec.PriceUpdatedDate;
+    if (rawDate instanceof Date) {
+      recordedAt = rawDate;
+    } else if (typeof rawDate === "number") {
+      // Excel serial date → JS Date via XLSX utility
+      const d = XLSX.SSF.parse_date_code(rawDate);
+      recordedAt = new Date(Date.UTC(d.y, d.m - 1, d.d, d.H, d.M, d.S));
+    } else {
+      recordedAt = new Date(String(rawDate).replace(" ", "T"));
+    }
+    if (isNaN(recordedAt.getTime())) { skipped++; continue; }
+
+    rows.push({
       station_id:  stationId,
       fuel_type:   fuelType,
       price_cents: price,
@@ -209,105 +164,119 @@ function processRows(rows, stationMap) {
     matched++;
   }
 
-  console.log(`   Parsed  : ${rows.length} rows`);
-  console.log(`   Matched : ${matched}`);
-  console.log(`   Too old : ${tooOld}`);
-  console.log(`   Skipped : ${skipped} (no station match or bad data)`);
-  return records;
+  console.log(`   Matched: ${matched}  |  Skipped (no station / bad data): ${skipped}`);
+  return rows;
 }
 
-// ── Step 6: Deduplicate against existing DB records ───────────
-async function deduplicateRecords(records) {
-  if (records.length === 0) return records;
-
-  console.log("\n🔎  Checking for existing records in DB…");
-
-  // Sample the date range of our records
-  const dates = records.map(r => r.recorded_at).sort();
-  const from  = dates[0];
-  const to    = dates[dates.length - 1];
-
+// ── Deduplicate against existing DB rows ──────────────────────
+async function deduplicate(rows) {
+  if (rows.length === 0) return rows;
+  const dates = rows.map(r => r.recorded_at).sort();
   const { data: existing } = await supabase
     .from("price_history")
     .select("station_id, fuel_type, recorded_at")
-    .gte("recorded_at", from)
-    .lte("recorded_at", to);
+    .gte("recorded_at", dates[0])
+    .lte("recorded_at", dates[dates.length - 1]);
 
-  const existingKeys = new Set(
+  const seen = new Set(
     (existing ?? []).map(r => `${r.station_id}|${r.fuel_type}|${r.recorded_at}`)
   );
-
-  const fresh = records.filter(
-    r => !existingKeys.has(`${r.station_id}|${r.fuel_type}|${r.recorded_at}`)
-  );
-
-  console.log(`   Already in DB : ${existingKeys.size}`);
-  console.log(`   New to insert : ${fresh.length}`);
+  const fresh = rows.filter(r => !seen.has(`${r.station_id}|${r.fuel_type}|${r.recorded_at}`));
+  console.log(`   Already in DB: ${seen.size}  |  New to insert: ${fresh.length}`);
   return fresh;
 }
 
-// ── Step 7: Bulk insert in batches ────────────────────────────
-async function bulkInsert(records) {
-  if (records.length === 0) {
-    console.log("\n✅  Nothing new to insert.");
-    return;
-  }
+// ── Bulk insert ────────────────────────────────────────────────
+async function bulkInsert(rows, label) {
+  if (rows.length === 0) { console.log("   Nothing new to insert."); return 0; }
 
-  const totalBatches = Math.ceil(records.length / BATCH_SIZE);
-  console.log(`\n💾  Inserting ${records.length} records in ${totalBatches} batches…`);
+  const batches = Math.ceil(rows.length / BATCH_SIZE);
+  console.log(`\n💾  Inserting ${rows.length} rows in ${batches} batches…`);
+  let inserted = 0, failed = 0;
 
-  let inserted = 0;
-  let errors   = 0;
-
-  for (let i = 0; i < records.length; i += BATCH_SIZE) {
-    const batch     = records.slice(i, i + BATCH_SIZE);
-    const batchNum  = Math.floor(i / BATCH_SIZE) + 1;
-
-    const { error } = await supabase
-      .from("price_history")
-      .insert(batch);
-
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from("price_history").insert(batch);
+    const batchNo = Math.floor(i / BATCH_SIZE) + 1;
     if (error) {
-      console.error(`   ❌ Batch ${batchNum}/${totalBatches} failed: ${error.message}`);
-      errors++;
+      console.error(`\n   ❌ Batch ${batchNo}/${batches}: ${error.message}`);
+      failed++;
     } else {
       inserted += batch.length;
-      const pct = Math.round((batchNum / totalBatches) * 100);
-      process.stdout.write(`   ✓ ${batchNum}/${totalBatches} (${pct}%) — ${inserted} rows inserted\r`);
+      const pct = Math.round((batchNo / batches) * 100);
+      process.stdout.write(`   ✓ ${batchNo}/${batches} (${pct}%) — ${inserted} inserted\r`);
     }
-
-    // Small pause to avoid overwhelming Supabase
-    await new Promise(r => setTimeout(r, 120));
+    await new Promise(r => setTimeout(r, 100));
   }
-
-  console.log(`\n\n✅  Done — ${inserted} rows inserted, ${errors} batches failed`);
+  console.log(`\n   Done: ${inserted} inserted, ${failed} batches failed`);
+  return inserted;
 }
 
 // ── Main ──────────────────────────────────────────────────────
 async function main() {
-  console.log("⛽  FuelFinder Historical Data Ingest");
-  console.log("════════════════════════════════════");
+  console.log("\n⛽  FuelFinder — Historical Data Ingest");
+  console.log("════════════════════════════════════════");
+  console.log(`   Importing: ${RESOURCES.map(r => r.name).join(", ")}`);
 
   try {
-    const urls       = await getDownloadUrls();
     const stationMap = await buildStationMap();
-    let   allRecords = [];
+    let totalInserted = 0;
 
-    for (const url of urls) {
-      const csvText = await downloadCsv(url);
-      const rows    = parseCsv(csvText);
-      console.log(`\n⚙️   Processing rows…`);
-      const records = processRows(rows, stationMap);
-      allRecords    = allRecords.concat(records);
+    // If a local file was passed as CLI arg, process it and exit
+    const localFile = process.argv[2];
+    if (localFile) {
+      if (!existsSync(localFile)) throw new Error(`File not found: ${localFile}`);
+      const ext = extname(localFile).toLowerCase();
+      console.log(`\n📂  Local file: ${localFile}`);
+
+      let rawRows;
+      if (ext === ".xlsx" || ext === ".xls") {
+        const buf  = await readFile(localFile);
+        const wb   = XLSX.read(buf, { type: "buffer", cellDates: true });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        rawRows    = XLSX.utils.sheet_to_json(ws, { defval: "" }).map(r => ({
+          ServiceStationName: r["ServiceStationName"] ?? r["Service Station Name"] ?? "",
+          Suburb:             r["Suburb"] ?? "",
+          FuelCode:           r["FuelCode"] ?? r["Fuel Code"] ?? "",
+          PriceUpdatedDate:   r["PriceUpdatedDate"] ?? r["Price Updated Date"] ?? "",
+          Price:              String(r["Price"] ?? ""),
+        }));
+        console.log(`   Parsed ${rawRows.length} rows from XLSX`);
+      } else {
+        rawRows = parseCsv(readFileSync(localFile, "utf8"));
+      }
+
+      console.log(`\n⚙️   Mapping to stations…`);
+      const rows     = mapRecords(rawRows, stationMap);
+      console.log(`\n🔎  Checking for duplicates…`);
+      const fresh    = await deduplicate(rows);
+      const inserted = await bulkInsert(fresh);
+      totalInserted += inserted;
+
+      console.log(`\n${"═".repeat(42)}`);
+      console.log(`✅  Complete — ${totalInserted} rows inserted\n`);
+      return;
     }
 
-    // Deduplicate across both files + existing DB
-    const deduped = await deduplicateRecords(allRecords);
-    await bulkInsert(deduped);
+    // Otherwise use the DataStore API resources defined above
+    for (const resource of RESOURCES) {
+      console.log(`\n${"─".repeat(42)}`);
+      console.log(`📅  ${resource.name}`);
 
-    console.log("\n🏁  Ingest complete. Refresh FuelFinder to see price history charts.");
+      const records  = await fetchAllRecords(resource.id, resource.name);
+      console.log(`\n⚙️   Mapping to stations…`);
+      const rows     = mapRecords(records, stationMap);
+      console.log(`\n🔎  Checking for duplicates…`);
+      const fresh    = await deduplicate(rows);
+      const inserted = await bulkInsert(fresh);
+      totalInserted += inserted;
+    }
+
+    console.log(`\n${"═".repeat(42)}`);
+    console.log(`✅  Complete — ${totalInserted} total rows inserted`);
+    console.log(`   Refresh FuelFinder to see price history charts.\n`);
   } catch (err) {
-    console.error("\n❌  Fatal error:", err.message);
+    console.error("\n❌  Fatal:", err.message);
     process.exit(1);
   }
 }
