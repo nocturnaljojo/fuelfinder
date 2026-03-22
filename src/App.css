@@ -652,30 +652,73 @@ body {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  gap: 8px;
+  background: #FFDD00;
   color: #000;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 14px;
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
-  transition: opacity 0.15s, transform 0.15s;
-  box-shadow: 0 1px 6px rgba(245,158,11,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  /* stacking context so ::before border sits behind */
+  position: relative;
+  isolation: isolate;
 }
-.support-strip-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+/* Spinning conic-gradient border — gold/orange/white cycle */
+.support-strip-btn::before {
+  content: "";
+  position: absolute;
+  inset: -2.5px;
+  border-radius: 12px;
+  background: conic-gradient(
+    from var(--bmc-angle),
+    #ff6b00 0%,
+    #FFDD00 20%,
+    #fff9c4 38%,
+    #ffb300 55%,
+    #ff8c00 72%,
+    #ff6b00 100%
+  );
+  animation: bmc-border-spin 2.5s linear infinite;
+  z-index: -1;
+}
+.support-strip-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255,221,0,0.5);
+}
+.support-strip-btn:hover::before { animation-duration: 1.2s; }
 
-/* Station list */
+/* Station list — collapsible header (rendered as <button>) */
 .station-list-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px 6px;
+  width: 100%;
+  padding: 11px 16px;
   gap: 12px;
+  background: var(--surface2);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
 }
-.station-list-count { font-size: 12px; color: var(--muted); }
+.station-list-header:hover { background: #252830; }
+.station-list-count { font-size: 12px; font-weight: 600; color: var(--text); }
+.station-list-header-right {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
 .station-list-sort-label { font-size: 11px; color: #64748b; }
+.list-chevron {
+  font-size: 16px; font-weight: 400; color: #64748b;
+  transition: transform 0.2s; display: inline-block;
+  transform: rotate(90deg);   /* points down = expanded */
+}
+.list-chevron.open { transform: rotate(90deg); }
+.list-chevron:not(.open) { transform: rotate(-90deg); } /* points up = collapsed */
 
 .station-list { display: flex; flex-direction: column; }
 .station-row {
@@ -899,13 +942,21 @@ body {
 }
 
 /* ── Animated border — CSS @property (conic-gradient spin) ── */
-/* Used by the engagement CTA button */
+/* Smooth angle interpolation — Chrome 85+, Safari 16.4+, FF 128+ */
+@property --bmc-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
 @property --cta-angle {
   syntax: "<angle>";
   initial-value: 0deg;
   inherits: false;
 }
 
+@keyframes bmc-border-spin {
+  to { --bmc-angle: 360deg; }
+}
 @keyframes cta-border-spin {
   to { --cta-angle: 360deg; }
 }
@@ -1268,7 +1319,7 @@ body {
   .support-strip-text { font-size: 11px; }
 
   /* ── Station list ── */
-  .station-list-header { flex-direction: row; align-items: center; }
+  .station-list-header { padding: 13px 14px; }
   .station-row  { padding: 13px 14px; }
   .station-name { font-size: 14px; }
   .station-price { font-size: 16px; }
