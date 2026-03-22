@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { supabase } from "./supabaseClient";
 import type { Station, FuelType, FuelStats, CurrentPriceRow } from "./types/fuel";
@@ -261,6 +261,61 @@ export function useEngagementGate() {
   }
 
   return { showGate, recordView, dismissGate };
+}
+
+// ── useFavourites ─────────────────────────────────────────────
+// Syncs a user's starred stations with Supabase.
+// Works with Clerk user IDs stored as plain TEXT in favourite_stations.
+export function useFavourites(stations: Station[]) {
+  const { user, isSignedIn } = useUser();
+  const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
+
+  // Load favourites whenever sign-in state changes
+  useEffect(() => {
+    if (!isSignedIn || !user?.id) {
+      setFavouriteIds(new Set());
+      return;
+    }
+    supabase
+      .from("favourite_stations")
+      .select("station_id")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        setFavouriteIds(
+          new Set((data ?? []).map((r: { station_id: number }) => r.station_id))
+        );
+      });
+  }, [isSignedIn, user?.id]);
+
+  // Optimistic toggle — updates UI immediately, then syncs to Supabase
+  const toggleFavourite = useCallback(
+    async (stationId: number) => {
+      if (!isSignedIn || !user?.id) return;
+      const isFav = favouriteIds.has(stationId);
+      if (isFav) {
+        setFavouriteIds(prev => { const n = new Set(prev); n.delete(stationId); return n; });
+        await supabase
+          .from("favourite_stations")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("station_id", stationId);
+      } else {
+        setFavouriteIds(prev => new Set([...prev, stationId]));
+        await supabase
+          .from("favourite_stations")
+          .insert({ user_id: user.id, station_id: stationId });
+      }
+    },
+    [isSignedIn, user?.id, favouriteIds]
+  );
+
+  // Full Station objects for the current result set that are favourited
+  const favouriteStations = useMemo(
+    () => stations.filter(s => favouriteIds.has(s.station_id)),
+    [stations, favouriteIds]
+  );
+
+  return { favouriteIds, favouriteStations, toggleFavourite };
 }
 
 // ── useCheapestAndPriciest ────────────────────────────────────
