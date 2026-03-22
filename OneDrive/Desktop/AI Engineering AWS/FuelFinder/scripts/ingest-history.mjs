@@ -141,7 +141,9 @@ function mapRecords(records, stationMap) {
     const price = parseFloat(rec.Price);
     if (isNaN(price) || price < 50 || price > 600) { skipped++; continue; }
 
-    // Date — may be a JS Date (cellDates:true), an Excel serial number, or a string
+    // Date — may be a JS Date (cellDates:true), an Excel serial, or one of two string formats:
+    //   ISO-like:    "2025-09-25 06:14:21"  (Sep 2025, Feb 2026)
+    //   Australian:  "4/10/2025 8:52"        (Oct 2025, Jan 2026 XLSX)
     let recordedAt;
     const rawDate = rec.PriceUpdatedDate;
     if (rawDate instanceof Date) {
@@ -151,7 +153,16 @@ function mapRecords(records, stationMap) {
       const d = XLSX.SSF.parse_date_code(rawDate);
       recordedAt = new Date(Date.UTC(d.y, d.m - 1, d.d, d.H, d.M, d.S));
     } else {
-      recordedAt = new Date(String(rawDate).replace(" ", "T"));
+      const s = String(rawDate).trim();
+      // DD/MM/YYYY H:MM[:SS] → parse manually to avoid ambiguity
+      const ddmm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (ddmm) {
+        const [, dd, mm, yyyy, hh, min, ss = "0"] = ddmm;
+        recordedAt = new Date(Date.UTC(+yyyy, +mm - 1, +dd, +hh, +min, +ss));
+      } else {
+        // ISO-like: "2025-09-25 06:14:21" → replace space with T
+        recordedAt = new Date(s.replace(" ", "T"));
+      }
     }
     if (isNaN(recordedAt.getTime())) { skipped++; continue; }
 
@@ -176,7 +187,8 @@ async function deduplicate(rows) {
     .from("price_history")
     .select("station_id, fuel_type, recorded_at")
     .gte("recorded_at", dates[0])
-    .lte("recorded_at", dates[dates.length - 1]);
+    .lte("recorded_at", dates[dates.length - 1])
+    .limit(100000);   // override Supabase 1000-row default to catch all existing rows
 
   const seen = new Set(
     (existing ?? []).map(r => `${r.station_id}|${r.fuel_type}|${r.recorded_at}`)
@@ -196,7 +208,9 @@ async function bulkInsert(rows, label) {
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
-    const { error } = await supabase.from("price_history").insert(batch);
+    // ignoreDuplicates: true → ON CONFLICT DO NOTHING (requires unique constraint 006)
+    const { error } = await supabase.from("price_history")
+      .upsert(batch, { onConflict: "station_id,fuel_type,recorded_at", ignoreDuplicates: true });
     const batchNo = Math.floor(i / BATCH_SIZE) + 1;
     if (error) {
       console.error(`\n   ❌ Batch ${batchNo}/${batches}: ${error.message}`);

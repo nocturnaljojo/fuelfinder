@@ -170,7 +170,7 @@ export function usePriceHistory(stationId: number | null, fuelType: string) {
     setUnchangedHours(null);
 
     const since = new Date();
-    since.setDate(since.getDate() - 30);
+    since.setDate(since.getDate() - 90);
 
     supabase
       .from("price_history")
