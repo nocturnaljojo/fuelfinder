@@ -158,7 +158,7 @@ export default function StationSheet({ station, allStationsForStation, onClose, 
         <div className="sheet-chart-section">
           <div className="sheet-chart-header">
             <div>
-              <span className="sheet-chart-title">30-Day Price History · {activeFuel}</span>
+              <span className="sheet-chart-title">90-Day Price History · {activeFuel}</span>
               {isSignedIn && !histLoading && lastChangedAt && unchangedHours !== null && (
                 <span className="sheet-last-changed">
                   Price last changed {formatHoursAgo(unchangedHours)}
