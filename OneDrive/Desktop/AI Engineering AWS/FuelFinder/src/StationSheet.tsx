@@ -247,9 +247,11 @@ export default function StationSheet({ station, allStationsForStation, onClose, 
         {/* Actions */}
         <div className="sheet-actions">
           <button className="sheet-directions-btn" onClick={openDirections}>
-            🧭 Get Directions
+            <span className="sheet-directions-icon">🧭</span>
+            <span>Get Directions</span>
+            <span className="sheet-directions-arrow">→</span>
           </button>
-          <button className="sheet-close-btn" onClick={onClose}>Close</button>
+          <button className="sheet-close-btn" onClick={onClose}>✕ Close</button>
         </div>
       </div>
       </div>
