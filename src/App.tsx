@@ -314,6 +314,10 @@ export default function App() {
   const [suggestions, setSuggestions]         = useState<NominatimResult[]>([]);
   const [suggestLoading, setSuggestLoading]   = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // "Scan this area" — tracks where the map is centred vs where data is loaded
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
   const suggestTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
@@ -394,13 +398,58 @@ export default function App() {
   function selectGPS() {
     setManualCoords(null);
     setLocationName("My Location");
+    setMapCenter(null);
   }
 
   function selectPreset(preset: typeof PRESET_LOCATIONS[0]) {
     setManualCoords([preset.lat, preset.lng]);
     setLocationName(preset.name);
     setMobileSidebarOpen(false);
+    setMapCenter(null); // reset scan button
     if (preset.region === "Regional NSW" || preset.region === "Tasmania") setRadiusKm(50);
+  }
+
+  // "Scan this area" — show button when map has drifted > 2km from current search origin
+  const distFromMapCenter = useMemo(() => {
+    if (!mapCenter) return 0;
+    const [mLat, mLng] = mapCenter;
+    const [cLat, cLng] = coords;
+    const R = 6371;
+    const dLat = ((mLat - cLat) * Math.PI) / 180;
+    const dLng = ((mLng - cLng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((cLat * Math.PI) / 180) *
+        Math.cos((mLat * Math.PI) / 180) *
+        Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, [mapCenter, coords]);
+
+  const showScanBtn = distFromMapCenter > 2; // show after 2km drift
+
+  async function handleScanArea() {
+    if (!mapCenter) return;
+    setScanLoading(true);
+    try {
+      // Reverse-geocode the map centre to get a friendly area name
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${mapCenter[0]}&lon=${mapCenter[1]}&format=json&zoom=10`;
+      const res  = await fetch(url, { headers: { "Accept-Language": "en" } });
+      const data = await res.json();
+      const place =
+        data?.address?.suburb ??
+        data?.address?.town ??
+        data?.address?.city ??
+        data?.address?.village ??
+        data?.address?.county ??
+        "this area";
+      setLocationName(place);
+    } catch {
+      setLocationName("this area");
+    } finally {
+      setManualCoords([mapCenter[0], mapCenter[1]]);
+      setMapCenter(null);
+      setScanLoading(false);
+    }
   }
 
   // Debounced suburb search — fires 350ms after the user stops typing
@@ -435,6 +484,7 @@ export default function App() {
     setSuggestions([]);
     setShowSuggestions(false);
     setMobileSidebarOpen(false);
+    setMapCenter(null);
   }
 
   function handleSearchKeyDown(e: React.KeyboardEvent) {
@@ -752,7 +802,18 @@ export default function App() {
             userLat={userLat}
             userLng={userLng}
             onSelectStation={handleSelectStation}
+            onMapMove={(lat, lng) => setMapCenter([lat, lng])}
           />
+          {/* "Scan this area" button — floats over map when user pans away */}
+          {showScanBtn && (
+            <button
+              className={`scan-area-btn${scanLoading ? " scan-area-btn--loading" : ""}`}
+              onClick={handleScanArea}
+              disabled={scanLoading}
+            >
+              {scanLoading ? "⟳ Scanning…" : "🔍 Scan this area"}
+            </button>
+          )}
         </div>
 
         {/* Scrollable content below map */}
