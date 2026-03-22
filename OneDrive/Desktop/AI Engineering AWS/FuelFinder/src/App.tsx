@@ -15,6 +15,7 @@ import FuelMap from "./FuelMap";
 import StationSheet from "./StationSheet";
 import AboutModal from "./AboutModal";
 import FeedbackModal from "./FeedbackModal";
+import ChartsModal from "./ChartsModal";
 import "./App.css";
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -309,6 +310,7 @@ export default function App() {
   const [listExpanded, setListExpanded] = useState(true);
   const [showAbout,    setShowAbout]    = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showCharts,   setShowCharts]   = useState(false);
   const [locationName, setLocationName] = useState("My Location");
   const [manualCoords, setManualCoords] = useState<[number, number] | null>(null);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -653,6 +655,20 @@ export default function App() {
           </>
         )}
 
+        {/* ── Sidebar nav — About + Charts ── */}
+        {!sidebarCollapsed && (
+          <div className="sidebar-nav">
+            <button className="sidebar-nav-btn" onClick={() => setShowAbout(true)}>
+              <span className="sidebar-nav-icon">ℹ️</span>
+              <span>About FuelFinder</span>
+            </button>
+            <button className="sidebar-nav-btn" onClick={() => setShowCharts(true)}>
+              <span className="sidebar-nav-icon">📊</span>
+              <span>Price Charts</span>
+            </button>
+          </div>
+        )}
+
         {/* Sidebar footer — version/credit */}
         <div className="sidebar-footer">
           <span className="sidebar-footer-text">FuelFinder · free for 🇦🇺</span>
@@ -827,21 +843,21 @@ export default function App() {
 
           {/* Support strip */}
           <div className="support-strip">
-            <div className="support-strip-left">
-              <button className="support-about-btn" onClick={() => setShowAbout(true)}>ℹ️ About</button>
+            <p className="support-strip-tagline">🇦🇺 FuelFinder is free · built for Australians</p>
+            <div className="support-strip-actions">
               <button className="support-feedback-btn" onClick={() => setShowFeedback(true)}>
                 💬 Feedback
               </button>
+              <a
+                href="https://www.buymeacoffee.com/nocturnaljv"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="support-strip-btn"
+                title="Support FuelFinder"
+              >
+                ☕ Buy me a coffee
+              </a>
             </div>
-            <a
-              href="https://www.buymeacoffee.com/nocturnaljv"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="support-strip-btn"
-              title="Support FuelFinder"
-            >
-              ☕ Buy me a coffee
-            </a>
           </div>
 
           {/* Station list header — tap to expand / collapse the full list */}
@@ -887,6 +903,17 @@ export default function App() {
 
       {/* Feedback modal */}
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+
+      {/* Charts modal */}
+      {showCharts && (
+        <ChartsModal
+          onClose={() => setShowCharts(false)}
+          stations={stations}
+          fuelType={fuelType}
+          radiusKm={radiusKm}
+          locationName={locationName}
+        />
+      )}
 
       {/* Station bottom sheet */}
       <StationSheet
