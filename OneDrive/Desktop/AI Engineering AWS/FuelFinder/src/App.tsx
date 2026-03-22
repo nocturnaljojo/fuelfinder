@@ -12,7 +12,7 @@ import {
   getFreshness,
 } from "./hooks";
 import { FUEL_TYPES } from "./types/fuel";
-import type { FuelType, SortMode, Station } from "./types/fuel";
+import type { FuelType, Station } from "./types/fuel";
 import FuelMap from "./FuelMap";
 import StationSheet from "./StationSheet";
 import "./App.css";
@@ -305,7 +305,6 @@ function timeAgo(date: Date, now: number): string {
 // ── App ───────────────────────────────────────────────────────
 export default function App() {
   const [fuelType, setFuelType]     = useState<FuelType>("U91");
-  const [sortMode, setSortMode]     = useState<SortMode>("distance");
   const [radiusKm, setRadiusKm]     = useState<number | null>(25);
   const [locationName, setLocationName] = useState("My Location");
   const [manualCoords, setManualCoords] = useState<[number, number] | null>(null);
@@ -373,15 +372,10 @@ export default function App() {
   const min = prices.length ? Math.min(...prices) : 0;
   const max = prices.length ? Math.max(...prices) : 0;
 
+  // Always sort by distance — leaderboard cards handle the price/value views
   const sorted = useMemo(() => {
-    const copy = [...stations];
-    copy.sort((a, b) =>
-      sortMode === "distance"
-        ? (a.distance_km ?? 999) - (b.distance_km ?? 999)
-        : a.price_cents - b.price_cents
-    );
-    return copy;
-  }, [stations, sortMode]);
+    return [...stations].sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
+  }, [stations]);
 
   const allFuelForSelected = useMemo(() => {
     if (!selectedStation) return [];
@@ -700,19 +694,9 @@ export default function App() {
           </>
         )}
 
-        {/* ── Buy Me a Coffee ── */}
-        <div className="sidebar-bmc">
-          <a
-            href="https://www.buymeacoffee.com/nocturnaljv"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bmc-btn"
-            title="Support FuelFinder"
-          >
-            <span className="bmc-emoji">☕</span>
-            <span className="bmc-text">Buy me a coffee</span>
-          </a>
-          <p className="bmc-tagline">Built free for Australians 🇦🇺</p>
+        {/* Sidebar footer — version/credit */}
+        <div className="sidebar-footer">
+          <span className="sidebar-footer-text">FuelFinder · free for 🇦🇺</span>
         </div>
       </aside>
 
@@ -738,13 +722,6 @@ export default function App() {
           </div>
 
           <div className="topbar-actions">
-            <a
-              href="https://www.buymeacoffee.com/nocturnaljv"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="topbar-bmc"
-              title="Buy me a coffee"
-            >☕</a>
             <SignedOut>
               <SignInButton mode="modal">
                 <button className="signin-btn">Sign in</button>
@@ -889,15 +866,28 @@ export default function App() {
             </div>
           )}
 
-          {/* Station list header + sort controls together */}
+          {/* Support strip — sits naturally between leaderboards and station list */}
+          <div className="support-strip">
+            <span className="support-strip-text">
+              🇦🇺 FuelFinder is free · built for Australians
+            </span>
+            <a
+              href="https://www.buymeacoffee.com/nocturnaljv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="support-strip-btn"
+              title="Support FuelFinder"
+            >
+              ☕ Buy me a coffee
+            </a>
+          </div>
+
+          {/* Station list header */}
           <div className="station-list-header">
             <span className="station-list-count">
               {!loading && `${sorted.length} station${sorted.length !== 1 ? "s" : ""} found`}
             </span>
-            <div className="sort-controls">
-              <button className={`sort-btn${sortMode === "distance" ? " active" : ""}`} onClick={() => setSortMode("distance")}>📍 Nearest first</button>
-              <button className={`sort-btn${sortMode === "price" ? " active" : ""}`}    onClick={() => setSortMode("price")}>💰 Cheapest first</button>
-            </div>
+            <span className="station-list-sort-label">📍 Nearest first</span>
           </div>
 
           {loading && <div className="list-loading">Loading stations…</div>}
