@@ -61,25 +61,42 @@ const FUEL_MAP = {
 };
 
 // ── Load station map from Supabase ────────────────────────────
+// Paginates through ALL stations — Supabase default limit is 1000
+// and without ordering it returns an arbitrary subset.
 async function buildStationMap() {
   console.log("\n🗄️   Loading stations from Supabase…");
-  const { data, error } = await supabase
-    .from("stations")
-    .select("id, name, suburb, api_station_id");
-  if (error) throw new Error(`Supabase error: ${error.message}`);
+
+  const all = [];
+  const PAGE = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("stations")
+      .select("id, name, suburb, api_station_id")
+      .order("id")
+      .range(from, from + PAGE - 1);
+
+    if (error) throw new Error(`Supabase stations error: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
   const map = new Map();
-  for (const s of data ?? []) {
+  for (const s of all) {
     // 1. By api_station_id (most precise)
     if (s.api_station_id) map.set(`api:${s.api_station_id}`, s.id);
     // 2. By name + suburb
-    const nameNorm = (s.name ?? "").toLowerCase().trim();
+    const nameNorm   = (s.name   ?? "").toLowerCase().trim();
     const suburbNorm = (s.suburb ?? "").toLowerCase().trim();
     if (suburbNorm) map.set(`${nameNorm}|${suburbNorm}`, s.id);
-    // 3. Name-only fallback (suburb is null in many DB rows)
+    // 3. Name-only fallback (suburb is null for most stations)
     if (!map.has(`name:${nameNorm}`)) map.set(`name:${nameNorm}`, s.id);
   }
-  console.log(`   Mapped ${data?.length ?? 0} stations (name+suburb + name-only fallback)`);
+
+  console.log(`   Mapped ${all.length} stations (all pages, name+suburb + name-only fallback)`);
   return map;
 }
 
