@@ -11,6 +11,8 @@ interface StationSheetProps {
   station: Station | null;
   allStationsForStation: Station[];
   onClose: () => void;
+  isFavourited?: boolean;
+  onToggleFavourite?: (stationId: number) => void;
 }
 
 function formatPrice(cents: number) { return `${cents.toFixed(1)}¢`; }
@@ -41,7 +43,7 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-export default function StationSheet({ station, allStationsForStation, onClose }: StationSheetProps) {
+export default function StationSheet({ station, allStationsForStation, onClose, isFavourited = false, onToggleFavourite }: StationSheetProps) {
   const { isSignedIn } = useUser();
   const [selectedFuel, setSelectedFuel] = useState<FuelType | null>(null);
 
@@ -118,7 +120,19 @@ export default function StationSheet({ station, allStationsForStation, onClose }
             </div>
           )}
           </div>
-          <button className="sheet-close" onClick={onClose} aria-label="Close">✕</button>
+          <div className="sheet-header-actions">
+            {isSignedIn && onToggleFavourite && (
+              <button
+                className={`sheet-fav-btn${isFavourited ? " sheet-fav-btn--active" : ""}`}
+                onClick={() => onToggleFavourite(station!.station_id)}
+                aria-label={isFavourited ? "Remove from favourites" : "Save to favourites"}
+                title={isFavourited ? "Remove from favourites" : "Save to favourites"}
+              >
+                {isFavourited ? "⭐" : "☆"}
+              </button>
+            )}
+            <button className="sheet-close" onClick={onClose} aria-label="Close">✕</button>
+          </div>
         </div>
 
         {/* Fuel type tabs */}

@@ -6,6 +6,7 @@ import {
   useCheapestAndPriciest,
   useFuelStats,
   useEngagementGate,
+  useFavourites,
   getPriceAgeHours,
   getFreshness,
 } from "./hooks";
@@ -207,8 +208,8 @@ function useBestValue(stations: Station[], count = 5): Station[] {
 }
 
 // ── Station row ───────────────────────────────────────────────
-function StationRow({ station, min, max, onSelect }: {
-  station: Station; min: number; max: number; onSelect: (s: Station) => void;
+function StationRow({ station, min, max, onSelect, isFavourited = false }: {
+  station: Station; min: number; max: number; onSelect: (s: Station) => void; isFavourited?: boolean;
 }) {
   const ageHours  = getPriceAgeHours(station.recorded_at);
   const freshness = getFreshness(ageHours);
@@ -217,7 +218,10 @@ function StationRow({ station, min, max, onSelect }: {
       <div className="station-row-left">
         <BrandBadge brand={station.brand} />
         <div className="station-info">
-          <span className="station-name">{station.name}</span>
+          <span className="station-name">
+            {isFavourited && <span className="row-fav-star" title="Saved station">⭐</span>}
+            {station.name}
+          </span>
           <span className="station-meta">{parseSuburbState(station.address)}</span>
         </div>
       </div>
@@ -353,6 +357,7 @@ export default function App() {
   const { stations, loading, error, lastRefresh, refetch } = useStations(fuelType, coords, radiusKm);
   const { cheapest, priciest } = useCheapestAndPriciest(stations);
   const bestValue = useBestValue(stations);
+  const { favouriteIds, favouriteStations, toggleFavourite } = useFavourites(stations);
   const nearest = useMemo(
     () =>
       [...stations]
@@ -625,6 +630,39 @@ export default function App() {
               </p>
             </div>
 
+            {/* ── My Favourites (signed-in only) ── */}
+            <SignedIn>
+              {favouriteStations.length > 0 && (
+                <div className="sidebar-section sidebar-favourites">
+                  <div className="sidebar-section-title">⭐ My Favourites</div>
+                  {favouriteStations.map(s => (
+                    <button
+                      key={s.station_id}
+                      className="fav-station-btn"
+                      onClick={() => handleSelectStation(s)}
+                    >
+                      <div className="fav-station-left">
+                        <BrandBadge brand={s.brand} />
+                        <div className="fav-station-info">
+                          <span className="fav-station-name">{s.name}</span>
+                          <span className="fav-station-sub">{parseSuburbState(s.address)}</span>
+                        </div>
+                      </div>
+                      <span className="fav-station-price">{formatPrice(s.price_cents)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {favouriteStations.length === 0 && (
+                <div className="sidebar-section sidebar-favourites sidebar-favourites--empty">
+                  <div className="sidebar-section-title">⭐ My Favourites</div>
+                  <p className="fav-empty-hint">
+                    Tap ☆ on any station to save it here for quick access.
+                  </p>
+                </div>
+              )}
+            </SignedIn>
+
             {/* ── Fuel Type ── */}
             <div className="sidebar-section">
               <div className="sidebar-section-title">⛽ Fuel Type</div>
@@ -880,7 +918,14 @@ export default function App() {
               {loading && <div className="list-loading">Loading stations…</div>}
               <div className="station-list">
                 {sorted.map(s => (
-                  <StationRow key={s.id} station={s} min={min} max={max} onSelect={handleSelectStation} />
+                  <StationRow
+                    key={s.id}
+                    station={s}
+                    min={min}
+                    max={max}
+                    onSelect={handleSelectStation}
+                    isFavourited={favouriteIds.has(s.station_id)}
+                  />
                 ))}
                 {!loading && sorted.length === 0 && (
                   <div className="list-empty">
@@ -920,6 +965,8 @@ export default function App() {
         station={selectedStation}
         allStationsForStation={allFuelForSelected}
         onClose={() => setSelectedStation(null)}
+        isFavourited={selectedStation ? favouriteIds.has(selectedStation.station_id) : false}
+        onToggleFavourite={toggleFavourite}
       />
     </div>
   );
