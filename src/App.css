@@ -450,20 +450,6 @@ body {
 .topbar-loading { font-size: 13px; color: var(--muted); }
 .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-.sort-controls {
-  display: flex; gap: 3px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 3px;
-}
-.sort-btn {
-  background: none; border: none; border-radius: 6px;
-  color: var(--muted); padding: 4px 10px;
-  font-size: 12px; font-weight: 500; cursor: pointer;
-  transition: all 0.15s;
-}
-.sort-btn.active { background: var(--accent); color: #fff; }
-.sort-btn:not(.active):hover { color: var(--text); }
-
 .refresh-btn {
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text);
@@ -644,31 +630,52 @@ body {
 .lb-price { font-size: 13px; font-weight: 700; }
 .lb-dist { font-size: 10px; color: var(--muted); }
 
+/* ── Support strip — Buy Me a Coffee (between leaderboards & list) ── */
+.support-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+.support-strip-text {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.support-strip-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 1px 6px rgba(245,158,11,0.35);
+}
+.support-strip-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+
 /* Station list */
 .station-list-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 8px;
+  padding: 10px 16px 6px;
   gap: 12px;
-  flex-wrap: wrap;
 }
 .station-list-count { font-size: 12px; color: var(--muted); }
-
-/* Sort controls — now lives next to the station count */
-.sort-controls {
-  display: flex; gap: 4px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 3px;
-}
-.sort-btn {
-  background: none; border: none; border-radius: 6px;
-  color: var(--muted); padding: 5px 12px;
-  font-size: 12px; font-weight: 500; cursor: pointer;
-  transition: all 0.15s; white-space: nowrap;
-}
-.sort-btn.active { background: var(--accent); color: #fff; }
-.sort-btn:not(.active):hover { color: var(--text); }
+.station-list-sort-label { font-size: 11px; color: #64748b; }
 
 .station-list { display: flex; flex-direction: column; }
 .station-row {
@@ -892,112 +899,28 @@ body {
 }
 
 /* ── Animated border — CSS @property (conic-gradient spin) ── */
-/* Smooth angle interpolation — supported Chrome 85+, Safari 16.4+, FF 128+ */
-@property --bmc-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
+/* Used by the engagement CTA button */
 @property --cta-angle {
   syntax: "<angle>";
   initial-value: 0deg;
   inherits: false;
 }
 
-@keyframes bmc-border-spin {
-  to { --bmc-angle: 360deg; }
-}
 @keyframes cta-border-spin {
   to { --cta-angle: 360deg; }
 }
 
-/* ── Buy Me a Coffee — sidebar footer ────────────────────── */
-.sidebar-bmc {
+/* ── Sidebar footer ───────────────────────────────────────── */
+.sidebar-footer {
   margin-top: auto;
-  padding: 20px 16px 24px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.bmc-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: #FFDD00;
-  color: #000;
-  border-radius: 10px;
-  padding: 10px 18px;
-  font-size: 14px;
-  font-weight: 700;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-  text-decoration: none;
-  transition: transform 0.15s, box-shadow 0.15s;
-  white-space: nowrap;
-  /* stacking context so ::before sits behind the button fill */
-  position: relative;
-  isolation: isolate;
-}
-
-/* Spinning conic-gradient border — warm gold/orange/white cycle */
-.bmc-btn::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 12px; /* button radius + inset */
-  background: conic-gradient(
-    from var(--bmc-angle),
-    #ff6b00 0%,
-    #FFDD00 20%,
-    #fff9c4 38%,
-    #ffb300 55%,
-    #ff8c00 72%,
-    #ff6b00 100%
-  );
-  animation: bmc-border-spin 2.5s linear infinite;
-  z-index: -1;
-}
-
-/* Hover: speed up + glow */
-.bmc-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(255, 221, 0, 0.5);
-}
-.bmc-btn:hover::before {
-  animation-duration: 1.2s;
-}
-.bmc-emoji { font-size: 18px; }
-.bmc-text  { letter-spacing: -0.01em; }
-
-.bmc-tagline {
-  font-size: 11px;
-  color: var(--muted);
   text-align: center;
 }
-
-/* ── Buy Me a Coffee — topbar icon ───────────────────────── */
-@keyframes bmc-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0px rgba(255,221,0,0));  }
-  50%       { filter: drop-shadow(0 0 6px rgba(255,221,0,0.8)); }
-}
-
-.topbar-bmc {
-  font-size: 18px;
-  text-decoration: none;
-  opacity: 0.85;
-  transition: opacity 0.15s, transform 0.15s;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  animation: bmc-pulse 3s ease-in-out infinite;
-}
-.topbar-bmc:hover {
-  opacity: 1;
-  transform: scale(1.2);
-  animation: none;
-  filter: drop-shadow(0 0 8px rgba(255,221,0,0.9));
+.sidebar-footer-text {
+  font-size: 10px;
+  color: #475569;
+  letter-spacing: 0.04em;
 }
 
 /* ── Engagement gate modal ────────────────────────────────── */
@@ -1283,7 +1206,6 @@ body {
   .topbar { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
   .topbar-context { min-width: 0; flex: 1; }
   .topbar-count, .topbar-loading { font-size: 11px; }
-  .topbar-bmc   { display: none; }          /* sidebar has the full BMC button */
   .last-refresh { display: none; }          /* no room; shown on desktop */
   .signin-btn   { padding: 5px 10px; font-size: 12px; }
   .refresh-btn  { padding: 5px 8px;  font-size: 12px; }
@@ -1337,13 +1259,16 @@ body {
   }
   .sidebar-loc-btn  { min-height: 44px; padding: 10px 14px; font-size: 13px; }
   .collapsible-toggle { padding: 10px 8px; min-height: 40px; }
-  .sort-btn         { padding: 8px 12px; }
   .sheet-fuel-tab   { padding: 10px 14px; }
   .tab-price        { font-size: 15px; }
   .sheet-close      { width: 36px; height: 36px; font-size: 18px; }
 
+  /* ── Support strip — stack on very small widths ── */
+  .support-strip { flex-wrap: wrap; gap: 8px; }
+  .support-strip-text { font-size: 11px; }
+
   /* ── Station list ── */
-  .station-list-header { flex-direction: column; align-items: flex-start; }
+  .station-list-header { flex-direction: row; align-items: center; }
   .station-row  { padding: 13px 14px; }
   .station-name { font-size: 14px; }
   .station-price { font-size: 16px; }
@@ -1380,10 +1305,6 @@ body {
 
   /* ── Autocomplete dropdown ── */
   .location-suggestions { max-height: 240px; overflow-y: auto; }
-
-  /* ── BMC sidebar button: full width ── */
-  .sidebar-bmc { padding: 16px 14px 20px; }
-  .bmc-btn     { width: 100%; justify-content: center; }
 
   /* ── Scrollable content: iOS safe area ── */
   .main-content-scroll {
