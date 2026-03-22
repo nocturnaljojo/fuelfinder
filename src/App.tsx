@@ -6,8 +6,6 @@ import {
   useCheapestAndPriciest,
   useFuelStats,
   useEngagementGate,
-  PRESET_LOCATIONS,
-  PRESET_STATES,
   getPriceAgeHours,
   getFreshness,
 } from "./hooks";
@@ -15,6 +13,8 @@ import { FUEL_TYPES } from "./types/fuel";
 import type { FuelType, Station } from "./types/fuel";
 import FuelMap from "./FuelMap";
 import StationSheet from "./StationSheet";
+import AboutModal from "./AboutModal";
+import FeedbackModal from "./FeedbackModal";
 import "./App.css";
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -307,6 +307,8 @@ export default function App() {
   const [fuelType, setFuelType]     = useState<FuelType>("U91");
   const [radiusKm, setRadiusKm]     = useState<number | null>(25);
   const [listExpanded, setListExpanded] = useState(true);
+  const [showAbout,    setShowAbout]    = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [locationName, setLocationName] = useState("My Location");
   const [manualCoords, setManualCoords] = useState<[number, number] | null>(null);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -324,16 +326,6 @@ export default function App() {
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
-  // Collapsible state sections — ACT open by default
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["ACT"]));
-  function toggleSection(name: string) {
-    setOpenSections(prev => {
-      const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
-      return next;
-    });
-  }
 
   const { showGate, recordView, dismissGate } = useEngagementGate();
 
@@ -394,14 +386,6 @@ export default function App() {
     setManualCoords(null);
     setLocationName("My Location");
     setMapCenter(null);
-  }
-
-  function selectPreset(preset: typeof PRESET_LOCATIONS[0]) {
-    setManualCoords([preset.lat, preset.lng]);
-    setLocationName(preset.name);
-    setMobileSidebarOpen(false);
-    setMapCenter(null); // reset scan button
-    if (preset.region === "Regional NSW" || preset.region === "Tasmania") setRadiusKm(50);
   }
 
   // "Scan this area" — show button when map has drifted > 2km from current search origin
@@ -633,36 +617,10 @@ export default function App() {
                 )}
               </div>
 
-              {/* 2-level hierarchy: State (collapsible) → Region (divider) → Town (button) */}
-              {PRESET_STATES.map(({ code, label, icon }) => {
-                const stateLocs = PRESET_LOCATIONS.filter(p => p.state === code);
-                // Unique regions in the order they first appear
-                const regions = [...new Map(stateLocs.map(p => [p.region, p.region])).keys()];
-                return (
-                  <CollapsibleGroup
-                    key={code}
-                    label={`${icon} ${label}`}
-                    open={openSections.has(code)}
-                    onToggle={() => toggleSection(code)}
-                  >
-                    {regions.map(region => (
-                      <div key={region} className="preset-region-group">
-                        {/* Region label — visual divider only, not clickable */}
-                        {regions.length > 1 && (
-                          <div className="preset-region-label">{region}</div>
-                        )}
-                        {stateLocs.filter(p => p.region === region).map(p => (
-                          <button
-                            key={p.name}
-                            className={`sidebar-loc-btn${locationName === p.name ? " active" : ""}`}
-                            onClick={() => selectPreset(p)}
-                          >{p.name}</button>
-                        ))}
-                      </div>
-                    ))}
-                  </CollapsibleGroup>
-                );
-              })}
+              {/* Tip: use search box above or "Scan this area" on the map */}
+              <p className="sidebar-search-tip">
+                💡 Search a suburb above, or pan the map and tap <strong>Scan this area</strong>
+              </p>
             </div>
 
             {/* ── Fuel Type ── */}
@@ -867,11 +825,14 @@ export default function App() {
             </div>
           )}
 
-          {/* Support strip — sits naturally between leaderboards and station list */}
+          {/* Support strip */}
           <div className="support-strip">
-            <span className="support-strip-text">
-              🇦🇺 FuelFinder is free · built for Australians
-            </span>
+            <div className="support-strip-left">
+              <button className="support-about-btn" onClick={() => setShowAbout(true)}>ℹ️ About</button>
+              <button className="support-feedback-btn" onClick={() => setShowFeedback(true)}>
+                💬 Feedback
+              </button>
+            </div>
             <a
               href="https://www.buymeacoffee.com/nocturnaljv"
               target="_blank"
@@ -918,8 +879,14 @@ export default function App() {
         </div>
       </main>
 
-      {/* Engagement gate modal — shown to non-signed-in users after 5 station views */}
-      {showGate && <EngagementModal onDismiss={dismissGate} />}
+      {/* Engagement gate modal */}
+      {showGate    && <EngagementModal onDismiss={dismissGate} />}
+
+      {/* About modal */}
+      {showAbout    && <AboutModal    onClose={() => setShowAbout(false)} />}
+
+      {/* Feedback modal */}
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
 
       {/* Station bottom sheet */}
       <StationSheet
