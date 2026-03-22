@@ -208,14 +208,9 @@ async function bulkInsert(rows, label) {
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
-    // ON CONFLICT DO NOTHING once migration 006 is applied (adds unique constraint)
-    // Falls back to plain insert if constraint not yet in place
+    // ON CONFLICT DO NOTHING — safe to re-run; unique constraint added in migration 006
     const { error } = await supabase.from("price_history")
-      .upsert(batch, { onConflict: "station_id,fuel_type,recorded_at", ignoreDuplicates: true })
-      .then(res => res.error?.message?.includes("no unique")
-        ? supabase.from("price_history").insert(batch)
-        : res
-      );
+      .upsert(batch, { onConflict: "station_id,fuel_type,recorded_at", ignoreDuplicates: true });
     const batchNo = Math.floor(i / BATCH_SIZE) + 1;
     if (error) {
       console.error(`\n   ❌ Batch ${batchNo}/${batches}: ${error.message}`);
