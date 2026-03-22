@@ -15,12 +15,15 @@ interface FuelMapProps {
   userLat: number;
   userLng: number;
   onSelectStation: (station: Station) => void;
+  onMapMove?: (lat: number, lng: number) => void;
 }
 
-export default function FuelMap({ stations, userLat, userLng, onSelectStation }: FuelMapProps) {
+export default function FuelMap({ stations, userLat, userLng, onSelectStation, onMapMove }: FuelMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Layer[]>([]);
+  const onMapMoveRef = useRef(onMapMove);
+  onMapMoveRef.current = onMapMove;
 
   // Init map once
   useEffect(() => {
@@ -35,6 +38,12 @@ export default function FuelMap({ stations, userLat, userLng, onSelectStation }:
       maxZoom: 19,
     }).addTo(map);
 
+    // Notify parent whenever the user pans or zooms
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      onMapMoveRef.current?.(c.lat, c.lng);
+    });
+
     mapRef.current = map;
 
     return () => {
@@ -44,7 +53,7 @@ export default function FuelMap({ stations, userLat, userLng, onSelectStation }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-centre when user location changes
+  // Re-centre when user location changes (programmatic — won't fire "moveend" re-trigger loop)
   useEffect(() => {
     mapRef.current?.setView([userLat, userLng], mapRef.current.getZoom());
   }, [userLat, userLng]);
