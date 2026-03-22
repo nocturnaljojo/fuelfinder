@@ -968,17 +968,61 @@ body {
 }
 .sheet-fuel-type { font-size: 13px; font-weight: 500; }
 .sheet-fuel-price { font-size: 18px; font-weight: 700; }
-.sheet-actions { padding: 0 20px; display: flex; gap: 10px; flex-wrap: wrap; }
-.sheet-action-btn {
-  flex: 1; min-width: 120px; background: var(--accent);
-  border: none; border-radius: var(--radius); color: #fff;
-  padding: 10px 16px; font-size: 13px; font-weight: 600;
-  cursor: pointer; text-align: center; transition: opacity 0.15s;
+.sheet-actions {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.sheet-action-btn:hover { opacity: 0.85; }
-.sheet-action-btn.secondary {
-  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+
+/* Primary CTA — Get Directions */
+.sheet-directions-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, #1d6fa4 0%, #2563eb 100%);
+  border: none;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.15s, transform 0.12s;
+  box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+  -webkit-tap-highlight-color: transparent;
 }
+.sheet-directions-btn:hover  { opacity: 0.92; transform: translateY(-1px); }
+.sheet-directions-btn:active { opacity: 1;    transform: translateY(0);    }
+
+.sheet-directions-icon { font-size: 18px; }
+.sheet-directions-arrow {
+  margin-left: auto;
+  font-size: 16px;
+  opacity: 0.75;
+}
+
+/* Secondary — Close */
+.sheet-close-btn {
+  width: 100%;
+  padding: 12px 20px;
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sheet-close-btn:hover  { background: rgba(255,255,255,0.06); color: var(--text); border-color: rgba(255,255,255,0.2); }
+.sheet-close-btn:active { background: rgba(255,255,255,0.1); }
 
 /* ── Animated border — CSS @property (conic-gradient spin) ── */
 /* Smooth angle interpolation — Chrome 85+, Safari 16.4+, FF 128+ */
