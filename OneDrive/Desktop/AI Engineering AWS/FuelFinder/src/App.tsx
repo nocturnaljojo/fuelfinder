@@ -306,6 +306,7 @@ function timeAgo(date: Date, now: number): string {
 export default function App() {
   const [fuelType, setFuelType]     = useState<FuelType>("U91");
   const [radiusKm, setRadiusKm]     = useState<number | null>(25);
+  const [listExpanded, setListExpanded] = useState(true);
   const [locationName, setLocationName] = useState("My Location");
   const [manualCoords, setManualCoords] = useState<[number, number] | null>(null);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -882,27 +883,37 @@ export default function App() {
             </a>
           </div>
 
-          {/* Station list header */}
-          <div className="station-list-header">
+          {/* Station list header — tap to expand / collapse the full list */}
+          <button
+            className="station-list-header"
+            onClick={() => setListExpanded(v => !v)}
+            aria-expanded={listExpanded}
+          >
             <span className="station-list-count">
               {!loading && `${sorted.length} station${sorted.length !== 1 ? "s" : ""} found`}
             </span>
-            <span className="station-list-sort-label">📍 Nearest first</span>
-          </div>
+            <span className="station-list-header-right">
+              <span className="station-list-sort-label">📍 Nearest first</span>
+              <span className={`list-chevron${listExpanded ? " open" : ""}`}>›</span>
+            </span>
+          </button>
 
-          {loading && <div className="list-loading">Loading stations…</div>}
-
-          <div className="station-list">
-            {sorted.map(s => (
-              <StationRow key={s.id} station={s} min={min} max={max} onSelect={handleSelectStation} />
-            ))}
-            {!loading && sorted.length === 0 && (
-              <div className="list-empty">
-                No {fuelType} prices found nearby.<br />
-                Try expanding the radius or selecting a different location.
+          {listExpanded && (
+            <>
+              {loading && <div className="list-loading">Loading stations…</div>}
+              <div className="station-list">
+                {sorted.map(s => (
+                  <StationRow key={s.id} station={s} min={min} max={max} onSelect={handleSelectStation} />
+                ))}
+                {!loading && sorted.length === 0 && (
+                  <div className="list-empty">
+                    No {fuelType} prices found nearby.<br />
+                    Try expanding the radius or selecting a different location.
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
 
         </div>
       </main>
