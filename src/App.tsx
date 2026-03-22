@@ -846,6 +846,7 @@ export default function App() {
 
           {/* Leaderboards — 4 cards */}
           {cheapest.length > 0 && (
+            <div className="leaderboards-wrap">
             <div className="leaderboards-row">
               <Leaderboard
                 icon="⭐"
@@ -884,6 +885,7 @@ export default function App() {
                 accentColor="#ef4444"
                 onSelect={handleSelectStation}
               />
+            </div>
             </div>
           )}
 

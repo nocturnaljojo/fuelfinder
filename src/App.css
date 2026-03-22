@@ -566,17 +566,39 @@ body {
 .stats-strip-value { font-size: 16px; font-weight: 700; color: var(--text); }
 .stats-strip-divider { width: 1px; height: 28px; background: var(--border); }
 
+/* Leaderboards — wrapper for fade hint */
+.leaderboards-wrap {
+  position: relative;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+/* Right-edge fade — tells users there are more cards to the right */
+.leaderboards-wrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 6px;              /* sit above the scrollbar track */
+  width: 56px;
+  background: linear-gradient(to right, transparent, var(--bg) 80%);
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* Leaderboards — horizontal scroll row of cards */
 .leaderboards-row {
   display: flex;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 14px 16px 10px;
   overflow-x: auto;
-  scrollbar-width: none;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  /* Thin styled scrollbar — visible so users know the row is scrollable */
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
 }
-.leaderboards-row::-webkit-scrollbar { display: none; }
+.leaderboards-row::-webkit-scrollbar        { height: 4px; }
+.leaderboards-row::-webkit-scrollbar-track  { background: transparent; }
+.leaderboards-row::-webkit-scrollbar-thumb  { background: #334155; border-radius: 2px; }
+.leaderboards-row::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 .leaderboard {
   background: var(--surface);
@@ -1275,15 +1297,36 @@ body {
   .stats-strip-label  { font-size: 9px; }
 
   /* ── Leaderboards — snap to cards on swipe ── */
+  .leaderboards-wrap::after { width: 36px; bottom: 5px; }
   .leaderboards-row {
-    gap: 8px; padding: 10px 12px;
+    gap: 8px; padding: 10px 12px 8px;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
+    /* Visible scrollbar so users know the row is swipeable */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(59,130,246,0.45) transparent;
   }
+  .leaderboards-row::-webkit-scrollbar        { height: 3px; }
+  .leaderboards-row::-webkit-scrollbar-thumb  { background: rgba(59,130,246,0.5); border-radius: 2px; }
   .leaderboard {
     flex: 0 0 82vw;       /* nearly full-width card = easy to read */
     max-width: 320px;
     scroll-snap-align: start;
+  }
+  /* "Swipe →" hint label rendered via wrap::before on mobile */
+  .leaderboards-wrap::before {
+    content: "swipe ›";
+    position: absolute;
+    bottom: 14px;
+    right: 10px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0.7;
+    z-index: 3;
+    pointer-events: none;
   }
 
   /* ── Touch targets: WCAG AA minimum 44px ── */
