@@ -834,6 +834,37 @@ export default function App() {
             </div>
           )}
 
+          {/* Low-result banner — suggest expanding radius */}
+          {!loading && sorted.length > 0 && sorted.length < 5 && radiusKm !== null && (
+            <div className="coverage-banner coverage-banner--low">
+              <span>📍 Only {sorted.length} station{sorted.length !== 1 ? "s" : ""} found nearby.</span>
+              <button className="coverage-expand-btn" onClick={() => setRadiusKm(null)}>
+                Expand to All →
+              </button>
+            </div>
+          )}
+
+          {/* No-result banner */}
+          {!loading && sorted.length === 0 && (
+            <div className="coverage-banner coverage-banner--empty">
+              <span>No {fuelType} stations found in this area.</span>
+              {radiusKm !== null && (
+                <button className="coverage-expand-btn" onClick={() => setRadiusKm(null)}>
+                  Try All radius →
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Non-ACT coverage notice — live prices only available in ACT */}
+          {!loading && sorted.length > 0 && !sorted.some(s =>
+            s.postcode && Number(s.postcode) >= 2600 && Number(s.postcode) <= 2914
+          ) && (
+            <div className="coverage-banner coverage-banner--historical">
+              ⏱ Prices shown are from our last data update — live tracking covers ACT only.
+            </div>
+          )}
+
           {/* Leaderboards — 4 cards */}
           {cheapest.length > 0 && (
             <div className="leaderboards-wrap">
