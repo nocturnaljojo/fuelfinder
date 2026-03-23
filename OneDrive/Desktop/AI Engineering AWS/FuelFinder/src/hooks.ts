@@ -3,6 +3,17 @@ import { useUser } from "@clerk/clerk-react";
 import { supabase } from "./supabaseClient";
 import type { Station, FuelType, FuelStats, CurrentPriceRow } from "./types/fuel";
 
+// ── ACT postcode allow-list ───────────────────────────────────
+// Mirrors the edge-function filter. Only live-cron-maintained ACT stations
+// are shown in the app; the DB also holds stale NSW/TAS historical data.
+const ACT_POSTCODES = [
+  "2600","2601","2602","2603","2604","2605","2606","2607",
+  "2608","2609","2610","2611","2612","2613","2614","2615",
+  "2616","2617","2618","2619","2620",
+  "2900","2901","2902","2903","2904","2905","2906","2907",
+  "2908","2909","2910","2911","2912","2913","2914",
+];
+
 // ── Preset locations ──────────────────────────────────────────
 export type LocationPreset = {
   name:   string;
@@ -102,6 +113,7 @@ export function useStations(
       .from("current_prices")
       .select("*")
       .eq("fuel_type", fuelType)
+      .in("postcode", ACT_POSTCODES)          // ← scope to live ACT stations only
       .order("price_cents", { ascending: true });
 
     if (err) {
