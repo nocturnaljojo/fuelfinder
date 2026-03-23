@@ -200,8 +200,8 @@ export default function StationSheet({ station, allStationsForStation, onClose, 
             </div>
           ) : histLoading ? (
             <div className="chart-loading">Loading history…</div>
-          ) : history.length < 2 ? (
-            <div className="chart-empty">Not enough history yet — check back after a few refreshes.</div>
+          ) : history.length === 0 ? (
+            <div className="chart-empty">No price history recorded yet — check back tomorrow.</div>
           ) : (
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={180}>

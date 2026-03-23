@@ -182,21 +182,39 @@ export function usePriceHistory(stationId: number | null, fuelType: string) {
       .then(({ data }) => {
         const rows = data ?? [];
 
-        // Group by day — keep last reading of each day
-        const byDay = new Map<string, number>();
+        // Extract price-change events — only emit a point when the price changes.
+        // Then add a synthetic "today" endpoint so the line always extends to now.
+        // This gives a meaningful chart even when the cron has only run for a few days,
+        // or when a station's price rarely changes.
+        const dayFmt = (iso: string) =>
+          new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString([], {
+            day: "numeric", month: "short",
+          });
+
+        const changeEvents: PricePoint[] = [];
+        let lastPrice: number | null = null;
         for (const row of rows) {
-          const day = row.recorded_at.slice(0, 10);
-          byDay.set(day, row.price_cents);
+          if (row.price_cents !== lastPrice) {
+            changeEvents.push({
+              date:  row.recorded_at.slice(0, 10),
+              price: row.price_cents,
+              label: dayFmt(row.recorded_at),
+            });
+            lastPrice = row.price_cents;
+          }
         }
-        setHistory(
-          [...byDay.entries()].map(([date, price]) => ({
-            date,
-            price,
-            label: new Date(date + "T12:00:00").toLocaleDateString([], {
-              day: "numeric", month: "short",
-            }),
-          }))
-        );
+
+        // Extend to today if the last change was not today
+        const today = new Date().toISOString().slice(0, 10);
+        if (changeEvents.length > 0 && changeEvents[changeEvents.length - 1].date !== today) {
+          changeEvents.push({
+            date:  today,
+            price: changeEvents[changeEvents.length - 1].price,
+            label: "Today",
+          });
+        }
+
+        setHistory(changeEvents);
 
         // Find when price last CHANGED — walk backwards until value differs
         if (rows.length > 0) {
