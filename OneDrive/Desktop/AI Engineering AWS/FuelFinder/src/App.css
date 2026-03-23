@@ -1083,6 +1083,53 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Coverage / low-result banners ───────────────────────── */
+.coverage-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 12px 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+.coverage-banner--low {
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.25);
+  color: #93c5fd;
+}
+.coverage-banner--empty {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: #fca5a5;
+  justify-content: center;
+  text-align: center;
+}
+.coverage-banner--historical {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  color: #fcd34d;
+  font-size: 12px;
+  justify-content: center;
+  text-align: center;
+}
+.coverage-expand-btn {
+  background: rgba(59,130,246,0.2);
+  border: 1px solid rgba(59,130,246,0.4);
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.coverage-expand-btn:hover { background: rgba(59,130,246,0.3); }
+
 /* ── Sidebar footer ───────────────────────────────────────── */
 .sidebar-footer {
   margin-top: auto;
