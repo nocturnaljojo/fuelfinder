@@ -3,17 +3,6 @@ import { useUser } from "@clerk/clerk-react";
 import { supabase } from "./supabaseClient";
 import type { Station, FuelType, FuelStats, CurrentPriceRow } from "./types/fuel";
 
-// ── ACT postcode allow-list ───────────────────────────────────
-// Mirrors the edge-function filter. Only live-cron-maintained ACT stations
-// are shown in the app; the DB also holds stale NSW/TAS historical data.
-const ACT_POSTCODES = [
-  "2600","2601","2602","2603","2604","2605","2606","2607",
-  "2608","2609","2610","2611","2612","2613","2614","2615",
-  "2616","2617","2618","2619","2620",
-  "2900","2901","2902","2903","2904","2905","2906","2907",
-  "2908","2909","2910","2911","2912","2913","2914",
-];
-
 // ── Preset locations ──────────────────────────────────────────
 export type LocationPreset = {
   name:   string;
@@ -109,11 +98,23 @@ export function useStations(
     setLoading(true);
     setError(null);
 
+    const [userLat, userLng] = userCoords;
+
+    // Server-side bounding-box filter keeps results well under Supabase's
+    // 1000-row PostgREST default for any scan location worldwide.
+    // "All" radius uses 150 km so we show the full region without flooding.
+    const searchKm = radiusKm ?? 150;
+    const dLat = searchKm / 111;
+    const dLng = searchKm / (111 * Math.cos(userLat * (Math.PI / 180)));
+
     const { data, error: err } = await supabase
       .from("current_prices")
       .select("*")
       .eq("fuel_type", fuelType)
-      .in("postcode", ACT_POSTCODES)          // ← scope to live ACT stations only
+      .gte("lat", userLat - dLat)
+      .lte("lat", userLat + dLat)
+      .gte("lng", userLng - dLng)
+      .lte("lng", userLng + dLng)
       .order("price_cents", { ascending: true });
 
     if (err) {
@@ -123,7 +124,6 @@ export function useStations(
     }
 
     const rows = (data as CurrentPriceRow[]) ?? [];
-    const [userLat, userLng] = userCoords;
 
     const enriched: Station[] = rows
       .map((row) => ({
