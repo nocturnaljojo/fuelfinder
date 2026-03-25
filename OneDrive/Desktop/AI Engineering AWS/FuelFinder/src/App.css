@@ -1083,6 +1083,100 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Brand filter (sidebar) ──────────────────────────────── */
+.brand-filter-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand-clear-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3b82f6;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.brand-clear-btn:hover { background: rgba(59,130,246,0.1); }
+.brand-chip-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brand-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(148,163,184,0.15);
+  border-radius: 7px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  text-align: left;
+  touch-action: manipulation;
+}
+.brand-chip:hover {
+  background: rgba(59,130,246,0.07);
+  border-color: rgba(59,130,246,0.3);
+  color: #cbd5e1;
+}
+.brand-chip--active {
+  background: rgba(59,130,246,0.12);
+  border-color: rgba(59,130,246,0.5);
+  color: #93c5fd;
+  font-weight: 600;
+}
+.brand-chip--active .brand-chip-count {
+  background: rgba(59,130,246,0.25);
+  color: #93c5fd;
+}
+.brand-chip-name { flex: 1; }
+.brand-chip-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.07);
+  color: #64748b;
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+/* ── Brand chart (ChartsModal) ────────────────────────────── */
+.brand-chart-wrap { padding: 4px 0 8px; }
+.brand-chart-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 12px 4px;
+}
+.brand-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 4px;
+}
+.brand-count-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.brand-count-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 /* ── Coverage / low-result banners ───────────────────────── */
 .coverage-banner {
   display: flex;
