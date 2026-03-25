@@ -16,6 +16,7 @@
 
 * [Tech Stack](architecture/tech-stack.md)
 * [Data Pipeline](architecture/data-pipeline.md)
+* [Historical Backfill](architecture/historical-backfill.md)
 * [Database Schema](architecture/database-schema.md)
 
 ## Roadmap
