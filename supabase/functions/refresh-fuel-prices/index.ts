@@ -255,13 +255,32 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Inserting ${priceRows.length} price records...`);
 
-    // Step 7: Batch insert prices in chunks of 500
+    // Step 7: Batch insert prices in chunks of 500.
+    // If a batch hits a unique-constraint (e.g. price unchanged since last run),
+    // fall back to row-by-row inserts so the non-duplicate rows still land.
     let inserted = 0;
+    let skipped  = 0;
     for (let i = 0; i < priceRows.length; i += 500) {
-      const { error } = await supabase.from("price_history").insert(priceRows.slice(i, i + 500));
-      if (error) throw new Error(`Price insert: ${error.message}`);
-      inserted += Math.min(500, priceRows.length - i);
+      const batch = priceRows.slice(i, i + 500);
+      const { error } = await supabase.from("price_history").insert(batch);
+      if (!error) {
+        inserted += batch.length;
+        continue;
+      }
+      // 23505 = unique_violation — fall back to individual inserts
+      if (error.code === "23505" || error.message.includes("duplicate")) {
+        console.warn(`Batch conflict — falling back to row-by-row (${batch.length} rows)`);
+        for (const row of batch) {
+          const { error: rowErr } = await supabase.from("price_history").insert(row);
+          if (!rowErr) inserted++;
+          else if (rowErr.code === "23505" || rowErr.message.includes("duplicate")) skipped++;
+          else throw new Error(`Price insert (row): ${rowErr.message}`);
+        }
+      } else {
+        throw new Error(`Price insert: ${error.message}`);
+      }
     }
+    console.log(`Prices: ${inserted} inserted, ${skipped} skipped (unchanged)`);
 
     const elapsed = Date.now() - startedAt;
     console.log(`Done: ${stationRows.length} stations, ${inserted} prices in ${elapsed}ms`);
