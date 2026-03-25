@@ -54,13 +54,35 @@ export default function ChartsModal({
   onClose, stations, fuelType, radiusKm, locationName,
 }: ChartsModalProps) {
 
-  const [activeTab,   setActiveTab]   = useState<"snapshot" | "trends">("snapshot");
+  const [activeTab,   setActiveTab]   = useState<"snapshot" | "trends" | "brands">("snapshot");
   const [daysBack,    setDaysBack]    = useState(90);
   const [activeFuels, setActiveFuels] = useState<Set<string>>(
     new Set(["U91", "E10", "P95", "P98", "Diesel", "Premium Diesel"])
   );
 
   const { points, fuels, loading: trendsLoading } = useFuelTrends(daysBack);
+
+  // ── Brand compare tab data ────────────────────────────────────
+  const BRAND_PALETTE = [
+    "#3b82f6","#22c55e","#f59e0b","#f97316","#8b5cf6",
+    "#ec4899","#06b6d4","#10b981","#84cc16","#6366f1",
+    "#ef4444","#a855f7","#14b8a6",
+  ];
+  const brandData = useMemo(() => {
+    const m = new Map<string, { total: number; count: number }>();
+    for (const s of stations) {
+      const b = s.brand ?? "Unknown";
+      const cur = m.get(b) ?? { total: 0, count: 0 };
+      m.set(b, { total: cur.total + s.price_cents, count: cur.count + 1 });
+    }
+    return [...m.entries()]
+      .map(([brand, { total, count }]) => ({
+        brand,
+        avg: Math.round(total / count * 10) / 10,
+        count,
+      }))
+      .sort((a, b) => a.avg - b.avg); // cheapest first
+  }, [stations]);
 
   // ── Snapshot tab data ────────────────────────────────────────
   const prices = stations.map(s => s.price_cents);
@@ -133,11 +155,15 @@ export default function ChartsModal({
           <button
             className={`charts-tab${activeTab === "snapshot" ? " charts-tab--active" : ""}`}
             onClick={() => setActiveTab("snapshot")}
-          >📍 Live Snapshot</button>
+          >📍 Snapshot</button>
           <button
             className={`charts-tab${activeTab === "trends" ? " charts-tab--active" : ""}`}
             onClick={() => setActiveTab("trends")}
-          >📈 Fuel Trends</button>
+          >📈 Trends</button>
+          <button
+            className={`charts-tab${activeTab === "brands" ? " charts-tab--active" : ""}`}
+            onClick={() => setActiveTab("brands")}
+          >🏷️ Brands</button>
         </div>
 
         <div className="charts-modal-body">
@@ -319,6 +345,87 @@ export default function ChartsModal({
                 </div>
               )}
             </>
+          )}
+
+          {/* ── BRANDS TAB ── */}
+          {activeTab === "brands" && (
+            brandData.length === 0 ? (
+              <p className="charts-empty">No station data available.</p>
+            ) : (
+              <div className="brand-chart-wrap">
+                <p className="brand-chart-subtitle">
+                  Average {fuelType} price by brand
+                  {radiusKm ? ` · within ${radiusKm}km` : ""} · {stations.length} stations
+                </p>
+                <ResponsiveContainer width="100%" height={Math.max(220, brandData.length * 42)}>
+                  <BarChart
+                    data={brandData}
+                    layout="vertical"
+                    margin={{ top: 4, right: 60, left: 4, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      domain={["auto", "auto"]}
+                      tick={{ fill: "#64748b", fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={v => `${v}¢`}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="brand"
+                      width={110}
+                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div style={{
+                            background: "#1e2330", border: "1px solid #334155",
+                            borderRadius: 10, padding: "10px 14px", fontSize: 12,
+                          }}>
+                            <div style={{ color: "#e2e8f0", fontWeight: 700, marginBottom: 4 }}>{d.brand}</div>
+                            <div style={{ color: "#94a3b8" }}>Avg {fuelType}: <strong style={{ color: "#f1f5f9" }}>{d.avg.toFixed(1)}¢</strong></div>
+                            <div style={{ color: "#94a3b8" }}>{d.count} station{d.count !== 1 ? "s" : ""}</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="avg" radius={[0, 6, 6, 0]} maxBarSize={28}
+                      label={{
+                        position: "right",
+                        formatter: (v: any) => `${Number(v).toFixed(1)}¢`,
+                        fill: "#94a3b8",
+                        fontSize: 11,
+                      }}
+                    >
+                      {brandData.map((entry, i) => (
+                        <Cell
+                          key={entry.brand}
+                          fill={BRAND_PALETTE[i % BRAND_PALETTE.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+
+                {/* Station count legend */}
+                <div className="brand-count-row">
+                  {brandData.map((d, i) => (
+                    <span key={d.brand} className="brand-count-item">
+                      <span className="brand-count-dot" style={{ background: BRAND_PALETTE[i % BRAND_PALETTE.length] }} />
+                      {d.brand} ({d.count})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )
           )}
 
         </div>

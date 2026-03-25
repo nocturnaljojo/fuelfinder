@@ -311,6 +311,7 @@ function timeAgo(date: Date, now: number): string {
 export default function App() {
   const [fuelType, setFuelType]     = useState<FuelType>("U91");
   const [radiusKm, setRadiusKm]     = useState<number | null>(25);
+  const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
   const [listExpanded, setListExpanded] = useState(true);
   const [showAbout,    setShowAbout]    = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -355,27 +356,47 @@ export default function App() {
   const { stations: lpg }         = useStations("LPG",            coords, radiusKm);
 
   const { stations, loading, error, lastRefresh, refetch } = useStations(fuelType, coords, radiusKm);
-  const { cheapest, priciest } = useCheapestAndPriciest(stations);
-  const bestValue = useBestValue(stations);
+
+  // ── Brand filter ──────────────────────────────────────────────
+  // Available brands from current radius result, sorted by station count
+  const availableBrands = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of stations) {
+      const b = s.brand ?? "Unknown";
+      m.set(b, (m.get(b) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([brand, count]) => ({ brand, count }));
+  }, [stations]);
+
+  // brandFiltered = stations after applying optional brand selection
+  const brandFiltered = useMemo(() => {
+    if (selectedBrands.size === 0) return stations;
+    return stations.filter(s => selectedBrands.has(s.brand ?? "Unknown"));
+  }, [stations, selectedBrands]);
+
+  const { cheapest, priciest } = useCheapestAndPriciest(brandFiltered);
+  const bestValue = useBestValue(brandFiltered);
   const { favouriteIds, favouriteStations, toggleFavourite } = useFavourites(stations);
   const nearest = useMemo(
     () =>
-      [...stations]
+      [...brandFiltered]
         .filter(s => s.distance_km !== undefined)
         .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999))
         .slice(0, 5),
-    [stations]
+    [brandFiltered]
   );
-  const stats = useFuelStats(stations);
+  const stats = useFuelStats(brandFiltered);
 
-  const prices = stations.map(s => s.price_cents);
+  const prices = brandFiltered.map(s => s.price_cents);
   const min = prices.length ? Math.min(...prices) : 0;
   const max = prices.length ? Math.max(...prices) : 0;
 
   // Always sort by distance — leaderboard cards handle the price/value views
   const sorted = useMemo(() => {
-    return [...stations].sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
-  }, [stations]);
+    return [...brandFiltered].sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
+  }, [brandFiltered]);
 
   const allFuelForSelected = useMemo(() => {
     if (!selectedStation) return [];
@@ -690,6 +711,38 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* ── Brand filter ── */}
+            {availableBrands.length > 1 && (
+              <div className="sidebar-section">
+                <div className="sidebar-section-title brand-filter-title">
+                  🏷️ Brand
+                  {selectedBrands.size > 0 && (
+                    <button
+                      className="brand-clear-btn"
+                      onClick={() => setSelectedBrands(new Set())}
+                    >Clear</button>
+                  )}
+                </div>
+                <div className="brand-chip-grid">
+                  {availableBrands.map(({ brand, count }) => (
+                    <button
+                      key={brand}
+                      className={`brand-chip${selectedBrands.has(brand) ? " brand-chip--active" : ""}`}
+                      onClick={() => setSelectedBrands(prev => {
+                        const next = new Set(prev);
+                        if (next.has(brand)) next.delete(brand);
+                        else next.add(brand);
+                        return next;
+                      })}
+                    >
+                      <span className="brand-chip-name">{brand}</span>
+                      <span className="brand-chip-count">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -788,7 +841,7 @@ export default function App() {
         {/* Map */}
         <div className="map-container">
           <FuelMap
-            stations={stations}
+            stations={brandFiltered}
             userLat={userLat}
             userLng={userLng}
             onSelectStation={handleSelectStation}
