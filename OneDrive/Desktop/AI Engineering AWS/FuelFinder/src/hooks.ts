@@ -356,6 +356,58 @@ export function useFuelTrends(daysBack: number = 90) {
   return { points, fuels, loading };
 }
 
+// ── useBrandTrends ────────────────────────────────────────────
+// Fetches daily average price per brand from price_history joined
+// with stations. Requires the avg_price_by_brand_daily RPC in Supabase.
+export interface BrandTrendRow {
+  date_key:  string;
+  brand:     string;
+  avg_price: number;
+}
+
+export function useBrandTrends(daysBack: number, fuelType: string) {
+  const [points,  setPoints]  = useState<TrendPoint[]>([]);
+  const [brands,  setBrands]  = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    supabase
+      .rpc("avg_price_by_brand_daily", { days_back: daysBack, p_fuel_type: fuelType })
+      .then(({ data, error }) => {
+        if (error || !data || data.length === 0) {
+          setPoints([]);
+          setBrands([]);
+          setLoading(false);
+          return;
+        }
+
+        const rows = data as BrandTrendRow[];
+        const byDate = new Map<string, TrendPoint>();
+        const brandSet = new Set<string>();
+
+        for (const row of rows) {
+          brandSet.add(row.brand);
+          if (!byDate.has(row.date_key)) {
+            byDate.set(row.date_key, {
+              date:  row.date_key,
+              label: new Date(row.date_key + "T12:00:00").toLocaleDateString([], {
+                day: "numeric", month: "short",
+              }),
+            });
+          }
+          byDate.get(row.date_key)![row.brand] = Number(row.avg_price);
+        }
+
+        setPoints([...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
+        setBrands([...brandSet].sort());
+        setLoading(false);
+      });
+  }, [daysBack, fuelType]);
+
+  return { points, brands, loading };
+}
+
 // ── useFavourites ─────────────────────────────────────────────
 // Syncs a user's starred stations with Supabase.
 // Works with Clerk user IDs stored as plain TEXT in favourite_stations.
