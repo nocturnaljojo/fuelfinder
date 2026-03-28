@@ -943,11 +943,25 @@ body {
   width: 100%;
   max-width: 680px;
   max-height: 82vh;
-  overflow-y: auto;
-  padding-bottom: 32px;
+  /* flex column so header is sticky and only body scrolls */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   position: relative;
   z-index: 201;
 }
+
+/* Scrollable body inside the sheet — tabs, chart, actions */
+.sheet-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  padding-bottom: 32px;
+}
+.sheet-scroll-body::-webkit-scrollbar { width: 3px; }
+.sheet-scroll-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .sheet-handle {
   width: 36px; height: 4px; border-radius: 2px;
   background: var(--border); margin: 12px auto 0;
@@ -1990,14 +2004,23 @@ body {
 
   /* ── Bottom sheet ── */
   .sheet {
-    max-height: 88vh;
-    /* Respect iPhone home bar */
-    padding-bottom: max(28px, env(safe-area-inset-bottom, 28px));
+    /* 72vh keeps ~28% of map visible above the sheet for spatial context */
+    max-height: 72vh;
+  }
+  .sheet-scroll-body {
+    /* Respect iPhone home bar inside the scrollable body */
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
   }
   .sheet-handle { width: 44px; height: 5px; margin: 14px auto 0; } /* bigger drag handle */
   .sheet-actions { padding: 0 16px 8px; }
   .sheet-chart-section { padding: 12px 12px 8px; }
   .chart-gate-wrap { margin: 0; } /* remove horizontal margin inside sheet */
+  /* Compact chart so full sheet fits in 72vh without needing to scroll */
+  .chart-loading { height: 130px; }
+  .chart-wrap { --sheet-chart-height: 130px; }
+  .chart-wrap svg { height: 130px !important; }
+  .chart-wrap .recharts-wrapper,
+  .chart-wrap .recharts-responsive-container { height: 130px !important; }
 
   /* ── Engagement modal → bottom sheet on mobile ── */
   .engagement-overlay {
