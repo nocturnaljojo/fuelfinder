@@ -5,7 +5,7 @@ import {
   LineChart, Line, Legend, CartesianGrid,
 } from "recharts";
 import type { Station } from "./types/fuel";
-import { useFuelTrends } from "./hooks";
+import { useFuelTrends, useBrandTrends } from "./hooks";
 
 interface ChartsModalProps {
   onClose:      () => void;
@@ -56,11 +56,13 @@ export default function ChartsModal({
 
   const [activeTab,   setActiveTab]   = useState<"snapshot" | "trends" | "brands">("snapshot");
   const [daysBack,    setDaysBack]    = useState(90);
+  const [brandView,   setBrandView]   = useState<"bar" | "line">("bar");
   const [activeFuels, setActiveFuels] = useState<Set<string>>(
     new Set(["U91", "E10", "P95", "P98", "Diesel", "Premium Diesel"])
   );
 
   const { points, fuels, loading: trendsLoading } = useFuelTrends(daysBack);
+  const { points: brandPoints, brands: brandLines, loading: brandTrendLoading } = useBrandTrends(daysBack, fuelType);
 
   // ── Brand compare tab data ────────────────────────────────────
   const BRAND_PALETTE = [
@@ -353,77 +355,190 @@ export default function ChartsModal({
               <p className="charts-empty">No station data available.</p>
             ) : (
               <div className="brand-chart-wrap">
-                <p className="brand-chart-subtitle">
-                  Average {fuelType} price by brand
-                  {radiusKm ? ` · within ${radiusKm}km` : ""} · {stations.length} stations
-                </p>
-                <ResponsiveContainer width="100%" height={Math.max(220, brandData.length * 42)}>
-                  <BarChart
-                    data={brandData}
-                    layout="vertical"
-                    margin={{ top: 4, right: 60, left: 4, bottom: 4 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" horizontal={false} />
-                    <XAxis
-                      type="number"
-                      domain={["auto", "auto"]}
-                      tick={{ fill: "#64748b", fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={v => `${v}¢`}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="brand"
-                      width={110}
-                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const d = payload[0].payload;
-                        return (
-                          <div style={{
-                            background: "#1e2330", border: "1px solid #334155",
-                            borderRadius: 10, padding: "10px 14px", fontSize: 12,
-                          }}>
-                            <div style={{ color: "#e2e8f0", fontWeight: 700, marginBottom: 4 }}>{d.brand}</div>
-                            <div style={{ color: "#94a3b8" }}>Avg {fuelType}: <strong style={{ color: "#f1f5f9" }}>{d.avg.toFixed(1)}¢</strong></div>
-                            <div style={{ color: "#94a3b8" }}>{d.count} station{d.count !== 1 ? "s" : ""}</div>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Bar dataKey="avg" radius={[0, 6, 6, 0]} maxBarSize={28}
-                      label={{
-                        position: "right",
-                        formatter: (v: any) => `${Number(v).toFixed(1)}¢`,
-                        fill: "#94a3b8",
-                        fontSize: 11,
-                      }}
-                    >
-                      {brandData.map((entry, i) => (
-                        <Cell
-                          key={entry.brand}
-                          fill={BRAND_PALETTE[i % BRAND_PALETTE.length]}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
 
-                {/* Station count legend */}
-                <div className="brand-count-row">
-                  {brandData.map((d, i) => (
-                    <span key={d.brand} className="brand-count-item">
-                      <span className="brand-count-dot" style={{ background: BRAND_PALETTE[i % BRAND_PALETTE.length] }} />
-                      {d.brand} ({d.count})
-                    </span>
-                  ))}
+                {/* Bar / Line view toggle */}
+                <div className="brand-view-toggle">
+                  <button
+                    className={`brand-view-btn${brandView === "bar" ? " brand-view-btn--active" : ""}`}
+                    onClick={() => setBrandView("bar")}
+                  >📊 Bar</button>
+                  <button
+                    className={`brand-view-btn${brandView === "line" ? " brand-view-btn--active" : ""}`}
+                    onClick={() => setBrandView("line")}
+                  >📈 Line</button>
                 </div>
+
+                {/* ── BAR VIEW — current snapshot ── */}
+                {brandView === "bar" && (
+                  <>
+                    <p className="brand-chart-subtitle">
+                      Average {fuelType} price by brand
+                      {radiusKm ? ` · within ${radiusKm}km` : ""} · {stations.length} stations
+                    </p>
+                    <ResponsiveContainer width="100%" height={Math.max(220, brandData.length * 42)}>
+                      <BarChart
+                        data={brandData}
+                        layout="vertical"
+                        margin={{ top: 4, right: 60, left: 4, bottom: 4 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          domain={["auto", "auto"]}
+                          tick={{ fill: "#64748b", fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={v => `${v}¢`}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="brand"
+                          width={110}
+                          tick={{ fill: "#cbd5e1", fontSize: 11 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload;
+                            return (
+                              <div style={{
+                                background: "#1e2330", border: "1px solid #334155",
+                                borderRadius: 10, padding: "10px 14px", fontSize: 12,
+                              }}>
+                                <div style={{ color: "#e2e8f0", fontWeight: 700, marginBottom: 4 }}>{d.brand}</div>
+                                <div style={{ color: "#94a3b8" }}>Avg {fuelType}: <strong style={{ color: "#f1f5f9" }}>{d.avg.toFixed(1)}¢</strong></div>
+                                <div style={{ color: "#94a3b8" }}>{d.count} station{d.count !== 1 ? "s" : ""}</div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Bar dataKey="avg" radius={[0, 6, 6, 0]} maxBarSize={28}
+                          label={{
+                            position: "right",
+                            formatter: (v: any) => `${Number(v).toFixed(1)}¢`,
+                            fill: "#94a3b8",
+                            fontSize: 11,
+                          }}
+                        >
+                          {brandData.map((entry, i) => (
+                            <Cell key={entry.brand} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="brand-count-row">
+                      {brandData.map((d, i) => (
+                        <span key={d.brand} className="brand-count-item">
+                          <span className="brand-count-dot" style={{ background: BRAND_PALETTE[i % BRAND_PALETTE.length] }} />
+                          {d.brand} ({d.count})
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* ── LINE VIEW — brand prices over time ── */}
+                {brandView === "line" && (
+                  <>
+                    {/* Date range selector (reuse trend range buttons) */}
+                    <div className="brand-line-controls">
+                      <div className="trend-range-btns">
+                        {[{ label: "7D", value: 7 }, { label: "30D", value: 30 }, { label: "90D", value: 90 }].map(opt => (
+                          <button
+                            key={opt.value}
+                            className={`trend-range-btn${daysBack === opt.value ? " trend-range-btn--active" : ""}`}
+                            onClick={() => setDaysBack(opt.value)}
+                          >{opt.label}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {brandTrendLoading ? (
+                      <div className="charts-empty">Loading brand trends…</div>
+                    ) : brandPoints.length === 0 ? (
+                      <div className="charts-empty">
+                        <div style={{ fontSize: 28, marginBottom: 10 }}>📭</div>
+                        <div style={{ fontWeight: 600, marginBottom: 6 }}>No historical data yet</div>
+                        <div style={{ color: "#64748b", fontSize: 13 }}>
+                          Data builds up as the hourly sync runs. Check back after a few days.
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="brand-chart-subtitle">
+                          {fuelType} average price over time · last {daysBack} days
+                        </p>
+                        <ResponsiveContainer width="100%" height={280}>
+                          <LineChart data={brandPoints} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                            <XAxis
+                              dataKey="label"
+                              tick={{ fontSize: 10, fill: "#64748b" }}
+                              interval={Math.ceil(brandPoints.length / 8) - 1}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 10, fill: "#64748b" }}
+                              axisLine={false}
+                              tickLine={false}
+                              tickFormatter={v => `${v}¢`}
+                              width={44}
+                              domain={["auto", "auto"]}
+                            />
+                            <Tooltip
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null;
+                                return (
+                                  <div style={{
+                                    background: "#1e2330", border: "1px solid #334155",
+                                    borderRadius: 10, padding: "10px 14px", fontSize: 12, minWidth: 150,
+                                  }}>
+                                    <div style={{ color: "#94a3b8", marginBottom: 6, fontWeight: 600 }}>{label}</div>
+                                    {[...payload]
+                                      .sort((a, b) => (a.value as number) - (b.value as number))
+                                      .map((p: any) => (
+                                        <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 3 }}>
+                                          <span style={{ color: p.color }}>{p.dataKey}</span>
+                                          <span style={{ color: "#e2e8f0", fontWeight: 700 }}>{Number(p.value).toFixed(1)}¢</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                );
+                              }}
+                            />
+                            {brandLines.map((brand, i) => (
+                              <Line
+                                key={brand}
+                                type="monotone"
+                                dataKey={brand}
+                                stroke={BRAND_PALETTE[i % BRAND_PALETTE.length]}
+                                strokeWidth={2}
+                                dot={false}
+                                activeDot={{ r: 4, strokeWidth: 0 }}
+                                connectNulls
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+
+                        {/* Brand colour legend */}
+                        <div className="trend-legend">
+                          {brandLines.map((brand, i) => (
+                            <span key={brand} className="trend-legend-item">
+                              <span className="trend-legend-dot" style={{ background: BRAND_PALETTE[i % BRAND_PALETTE.length] }} />
+                              {brand}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
               </div>
             )
           )}
