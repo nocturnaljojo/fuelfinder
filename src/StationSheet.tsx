@@ -100,6 +100,7 @@ export default function StationSheet({ station, allStationsForStation, onClose, 
       {/* Backdrop — sheet lives INSIDE so flex-end alignment works */}
       <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={e => e.stopPropagation()}>
+        {/* Fixed top — handle + header stay put while body scrolls */}
         <div className="sheet-handle" />
 
         {/* Header */}
@@ -134,6 +135,9 @@ export default function StationSheet({ station, allStationsForStation, onClose, 
             <button className="sheet-close" onClick={onClose} aria-label="Close">✕</button>
           </div>
         </div>
+
+        {/* ── Scrollable body — tabs, chart, actions ── */}
+        <div className="sheet-scroll-body">
 
         {/* Fuel type tabs */}
         {allStationsForStation.length > 0 && (
@@ -253,6 +257,8 @@ export default function StationSheet({ station, allStationsForStation, onClose, 
           </button>
           <button className="sheet-close-btn" onClick={onClose}>✕ Close</button>
         </div>
+
+        </div>{/* end sheet-scroll-body */}
       </div>
       </div>
     </>
