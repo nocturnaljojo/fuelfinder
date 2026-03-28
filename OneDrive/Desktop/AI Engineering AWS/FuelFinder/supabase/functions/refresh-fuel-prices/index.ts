@@ -239,7 +239,14 @@ Deno.serve(async (req: Request) => {
     console.log(`Mapped ${codeToDbId.size} stations to DB IDs`);
 
     // Step 6: Build price rows
-    const now = new Date().toISOString();
+    // Round timestamp to the top of the current hour so that all three 20-min
+    // cron runs within the same hour share an identical recorded_at.
+    // The unique index (station_id, fuel_type, recorded_at) then ensures only
+    // the FIRST run of each hour inserts — subsequent runs are silently skipped.
+    const hourSlot = new Date();
+    hourSlot.setUTCMinutes(0, 0, 0);
+    const recordedAt = hourSlot.toISOString(); // e.g. "2026-03-28T05:00:00.000Z"
+
     const priceRows = allPrices
       .filter((p: any) => filteredCodeSet.has(String(p.stationcode)) && codeToDbId.has(String(p.stationcode)))
       .flatMap((p: any) => {
@@ -249,38 +256,27 @@ Deno.serve(async (req: Request) => {
           station_id: codeToDbId.get(String(p.stationcode)),
           fuel_type: ft,
           price_cents: p.price,
-          recorded_at: now,
+          recorded_at: recordedAt,
         }];
       });
 
-    console.log(`Inserting ${priceRows.length} price records...`);
+    console.log(`Inserting ${priceRows.length} price records for slot ${recordedAt}...`);
 
-    // Step 7: Batch insert prices in chunks of 500.
-    // If a batch hits a unique-constraint (e.g. price unchanged since last run),
-    // fall back to row-by-row inserts so the non-duplicate rows still land.
+    // Step 7: Upsert prices — ignoreDuplicates skips rows that already exist
+    // for this hour slot without throwing an error.
     let inserted = 0;
     let skipped  = 0;
     for (let i = 0; i < priceRows.length; i += 500) {
       const batch = priceRows.slice(i, i + 500);
-      const { error } = await supabase.from("price_history").insert(batch);
-      if (!error) {
-        inserted += batch.length;
-        continue;
-      }
-      // 23505 = unique_violation — fall back to individual inserts
-      if (error.code === "23505" || error.message.includes("duplicate")) {
-        console.warn(`Batch conflict — falling back to row-by-row (${batch.length} rows)`);
-        for (const row of batch) {
-          const { error: rowErr } = await supabase.from("price_history").insert(row);
-          if (!rowErr) inserted++;
-          else if (rowErr.code === "23505" || rowErr.message.includes("duplicate")) skipped++;
-          else throw new Error(`Price insert (row): ${rowErr.message}`);
-        }
-      } else {
-        throw new Error(`Price insert: ${error.message}`);
-      }
+      const { data, error } = await supabase
+        .from("price_history")
+        .upsert(batch, { onConflict: "station_id,fuel_type,recorded_at", ignoreDuplicates: true })
+        .select("station_id");
+      if (error) throw new Error(`Price upsert: ${error.message}`);
+      inserted += data?.length ?? 0;
+      skipped  += batch.length - (data?.length ?? 0);
     }
-    console.log(`Prices: ${inserted} inserted, ${skipped} skipped (unchanged)`);
+    console.log(`Prices: ${inserted} inserted, ${skipped} skipped (already recorded this hour)`);
 
     const elapsed = Date.now() - startedAt;
     console.log(`Done: ${stationRows.length} stations, ${inserted} prices in ${elapsed}ms`);
