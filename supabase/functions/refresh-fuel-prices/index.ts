@@ -122,10 +122,22 @@ async function fetchInBatches<T>(
   return results;
 }
 
+// ── CORS headers (required for browser-initiated invoke calls) ─
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
 // ── Main handler ──────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight — browser sends OPTIONS before the real request
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
+
   if (req.method !== "POST" && req.method !== "GET") {
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", { status: 405, headers: CORS });
   }
 
   const startedAt = Date.now();
@@ -289,7 +301,7 @@ Deno.serve(async (req: Request) => {
         prices_inserted: inserted,
         elapsed_ms: elapsed,
       }),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { "Content-Type": "application/json", ...CORS } }
     );
 
   } catch (err) {
@@ -297,7 +309,7 @@ Deno.serve(async (req: Request) => {
     console.error("Error:", message);
     return new Response(
       JSON.stringify({ ok: false, error: message, elapsed_ms: Date.now() - startedAt }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json", ...CORS } }
     );
   }
 });
