@@ -491,6 +491,9 @@ body {
 /* Map */
 .map-container {
   flex-shrink: 0; height: 40vh; min-height: 260px; position: relative;
+  /* Contain all of Leaflet's internal z-indices (tile compositing layers)
+     so they can't punch through the station sheet backdrop */
+  isolation: isolate;
 }
 .map-container > div { width: 100%; height: 100%; }
 
@@ -933,8 +936,11 @@ body {
 
 
 .sheet-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
-  z-index: 200; display: flex; align-items: flex-end; justify-content: center;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+  /* 2000 — above Leaflet map controls (1000), sidebar (1100), and
+     any composited tile layers that escape isolation: isolate */
+  z-index: 2000;
+  display: flex; align-items: flex-end; justify-content: center;
 }
 .sheet {
   background: var(--surface);
@@ -948,7 +954,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  z-index: 201;
+  z-index: 2001;
 }
 
 /* Scrollable body inside the sheet — tabs, chart, actions */
