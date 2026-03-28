@@ -57,6 +57,7 @@ export default function ChartsModal({
   const [activeTab,   setActiveTab]   = useState<"snapshot" | "trends" | "brands">("snapshot");
   const [daysBack,    setDaysBack]    = useState(90);
   const [brandView,   setBrandView]   = useState<"bar" | "line">("bar");
+  const [topN,        setTopN]        = useState<5 | 10 | null>(10); // null = All
   const [activeFuels, setActiveFuels] = useState<Set<string>>(
     new Set(["U91", "E10", "P95", "P98", "Diesel", "Premium Diesel"])
   );
@@ -441,103 +442,144 @@ export default function ChartsModal({
                 )}
 
                 {/* ── LINE VIEW — brand prices over time ── */}
-                {brandView === "line" && (
-                  <>
-                    {/* Date range selector (reuse trend range buttons) */}
-                    <div className="brand-line-controls">
-                      <div className="trend-range-btns">
-                        {[{ label: "7D", value: 7 }, { label: "30D", value: 30 }, { label: "90D", value: 90 }].map(opt => (
-                          <button
-                            key={opt.value}
-                            className={`trend-range-btn${daysBack === opt.value ? " trend-range-btn--active" : ""}`}
-                            onClick={() => setDaysBack(opt.value)}
-                          >{opt.label}</button>
-                        ))}
-                      </div>
-                    </div>
+                {brandView === "line" && (() => {
+                  // Rank brands by station count from snapshot data (most stations = most relevant)
+                  const brandCountMap = new Map(brandData.map(d => [d.brand, d.count]));
+                  const rankedBrands = [...brandLines].sort(
+                    (a, b) => (brandCountMap.get(b) ?? 0) - (brandCountMap.get(a) ?? 0)
+                  );
+                  // Stable colour map — brand always gets the same colour regardless of filter
+                  const brandColorMap = new Map(
+                    rankedBrands.map((b, i) => [b, BRAND_PALETTE[i % BRAND_PALETTE.length]])
+                  );
+                  // Which brands to show after Top N preset
+                  const presetBrands = topN ? rankedBrands.slice(0, topN) : rankedBrands;
 
-                    {brandTrendLoading ? (
-                      <div className="charts-empty">Loading brand trends…</div>
-                    ) : brandPoints.length === 0 ? (
-                      <div className="charts-empty">
-                        <div style={{ fontSize: 28, marginBottom: 10 }}>📭</div>
-                        <div style={{ fontWeight: 600, marginBottom: 6 }}>No historical data yet</div>
-                        <div style={{ color: "#64748b", fontSize: 13 }}>
-                          Data builds up as the hourly sync runs. Check back after a few days.
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="brand-chart-subtitle">
-                          {fuelType} average price over time · last {daysBack} days
-                        </p>
-                        <ResponsiveContainer width="100%" height={280}>
-                          <LineChart data={brandPoints} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                            <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 10, fill: "#64748b" }}
-                              interval={Math.ceil(brandPoints.length / 8) - 1}
-                              axisLine={false}
-                              tickLine={false}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 10, fill: "#64748b" }}
-                              axisLine={false}
-                              tickLine={false}
-                              tickFormatter={v => `${v}¢`}
-                              width={44}
-                              domain={["auto", "auto"]}
-                            />
-                            <Tooltip
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null;
-                                return (
-                                  <div style={{
-                                    background: "#1e2330", border: "1px solid #334155",
-                                    borderRadius: 10, padding: "10px 14px", fontSize: 12, minWidth: 150,
-                                  }}>
-                                    <div style={{ color: "#94a3b8", marginBottom: 6, fontWeight: 600 }}>{label}</div>
-                                    {[...payload]
-                                      .sort((a, b) => (a.value as number) - (b.value as number))
-                                      .map((p: any) => (
-                                        <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 3 }}>
-                                          <span style={{ color: p.color }}>{p.dataKey}</span>
-                                          <span style={{ color: "#e2e8f0", fontWeight: 700 }}>{Number(p.value).toFixed(1)}¢</span>
-                                        </div>
-                                      ))}
-                                  </div>
-                                );
-                              }}
-                            />
-                            {brandLines.map((brand, i) => (
-                              <Line
-                                key={brand}
-                                type="monotone"
-                                dataKey={brand}
-                                stroke={BRAND_PALETTE[i % BRAND_PALETTE.length]}
-                                strokeWidth={2}
-                                dot={false}
-                                activeDot={{ r: 4, strokeWidth: 0 }}
-                                connectNulls
-                              />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
+                  // activeBrandLines = user's manual toggle (initialised from preset on first render)
+                  // We derive it each render so preset changes reset the selection automatically.
+                  const visibleBrands = presetBrands;
 
-                        {/* Brand colour legend */}
-                        <div className="trend-legend">
-                          {brandLines.map((brand, i) => (
-                            <span key={brand} className="trend-legend-item">
-                              <span className="trend-legend-dot" style={{ background: BRAND_PALETTE[i % BRAND_PALETTE.length] }} />
-                              {brand}
-                            </span>
+                  return (
+                    <>
+                      {/* Controls row */}
+                      <div className="brand-line-controls">
+                        {/* Date range */}
+                        <div className="trend-range-btns">
+                          {[{ label: "7D", value: 7 }, { label: "30D", value: 30 }, { label: "90D", value: 90 }].map(opt => (
+                            <button
+                              key={opt.value}
+                              className={`trend-range-btn${daysBack === opt.value ? " trend-range-btn--active" : ""}`}
+                              onClick={() => setDaysBack(opt.value)}
+                            >{opt.label}</button>
                           ))}
                         </div>
-                      </>
-                    )}
-                  </>
-                )}
+                        {/* Top N filter */}
+                        <div className="brand-topn-btns">
+                          {([5, 10, null] as (5 | 10 | null)[]).map(n => (
+                            <button
+                              key={String(n)}
+                              className={`trend-range-btn${topN === n ? " trend-range-btn--active" : ""}`}
+                              onClick={() => setTopN(n)}
+                            >{n ? `Top ${n}` : "All"}</button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Brand chip toggles — click to show/hide individual lines */}
+                      {!brandTrendLoading && brandPoints.length > 0 && (
+                        <div className="brand-chip-filter">
+                          <span className="brand-chip-filter-label">Brands</span>
+                          <div className="brand-chip-filter-grid">
+                            {visibleBrands.map(brand => {
+                              const color = brandColorMap.get(brand) ?? "#94a3b8";
+                              const count = brandCountMap.get(brand) ?? 0;
+                              return (
+                                <span key={brand} className="brand-line-chip"
+                                  style={{ borderColor: color + "66", color }}>
+                                  <span className="brand-line-chip-dot" style={{ background: color }} />
+                                  {brand}
+                                  <span className="brand-line-chip-count">{count}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {brandTrendLoading ? (
+                        <div className="charts-empty">Loading brand trends…</div>
+                      ) : brandPoints.length === 0 ? (
+                        <div className="charts-empty">
+                          <div style={{ fontSize: 28, marginBottom: 10 }}>📭</div>
+                          <div style={{ fontWeight: 600, marginBottom: 6 }}>No historical data yet</div>
+                          <div style={{ color: "#64748b", fontSize: 13 }}>
+                            Data builds up as the hourly sync runs. Check back after a few days.
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="brand-chart-subtitle">
+                            {fuelType} · {visibleBrands.length} brand{visibleBrands.length !== 1 ? "s" : ""} · last {daysBack} days
+                          </p>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <LineChart data={brandPoints} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                tick={{ fontSize: 10, fill: "#64748b" }}
+                                interval={Math.ceil(brandPoints.length / 8) - 1}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 10, fill: "#64748b" }}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={v => `${v}¢`}
+                                width={44}
+                                domain={["auto", "auto"]}
+                              />
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (!active || !payload?.length) return null;
+                                  return (
+                                    <div style={{
+                                      background: "#1e2330", border: "1px solid #334155",
+                                      borderRadius: 10, padding: "10px 14px", fontSize: 12, minWidth: 160,
+                                    }}>
+                                      <div style={{ color: "#94a3b8", marginBottom: 6, fontWeight: 600 }}>{label}</div>
+                                      {[...payload]
+                                        .filter(p => p.value != null)
+                                        .sort((a, b) => (a.value as number) - (b.value as number))
+                                        .map((p: any) => (
+                                          <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 3 }}>
+                                            <span style={{ color: p.color }}>{p.dataKey}</span>
+                                            <span style={{ color: "#e2e8f0", fontWeight: 700 }}>{Number(p.value).toFixed(1)}¢</span>
+                                          </div>
+                                        ))}
+                                    </div>
+                                  );
+                                }}
+                              />
+                              {visibleBrands.map(brand => (
+                                <Line
+                                  key={brand}
+                                  type="monotone"
+                                  dataKey={brand}
+                                  stroke={brandColorMap.get(brand) ?? "#94a3b8"}
+                                  strokeWidth={2}
+                                  dot={false}
+                                  activeDot={{ r: 4, strokeWidth: 0 }}
+                                  connectNulls
+                                />
+                              ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
 
               </div>
             )
