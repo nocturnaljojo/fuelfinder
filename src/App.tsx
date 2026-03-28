@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
+import { supabase } from "./supabaseClient";
 import {
   useGeolocation,
   useStations,
@@ -327,6 +328,40 @@ export default function App() {
   // "Scan this area" — tracks where the map is centred vs where data is loaded
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
+
+  // ── Live data sync ────────────────────────────────────────────
+  // Calls the edge function to pull latest prices from NSW Open Data API.
+  // Cooldown matches the cron interval (60 min) to prevent hammering the API.
+  const SYNC_COOLDOWN_MS = 60 * 60 * 1000;
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(() => {
+    const v = localStorage.getItem("ff_last_sync");
+    return v ? parseInt(v, 10) : null;
+  });
+  const syncCooldownRemaining = lastSyncAt
+    ? Math.max(0, SYNC_COOLDOWN_MS - (Date.now() - lastSyncAt))
+    : 0;
+
+  async function syncLiveData() {
+    if (syncing || syncCooldownRemaining > 0) return;
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("refresh-fuel-prices");
+      if (error) throw error;
+      const mins = Math.round((data?.elapsed_ms ?? 0) / 1000);
+      setSyncMsg(`✓ ${data?.prices_inserted ?? 0} new prices — ${data?.stations_upserted ?? 0} stations updated in ${mins}s`);
+      const t = Date.now();
+      setLastSyncAt(t);
+      localStorage.setItem("ff_last_sync", String(t));
+      refetch();
+    } catch (e: any) {
+      setSyncMsg(`⚠️ Sync failed: ${e?.message ?? "unknown error"}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
   const suggestTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
@@ -799,6 +834,14 @@ export default function App() {
             <button className="refresh-btn" onClick={refetch} disabled={loading}>
               {loading ? "…" : "↻ Refresh"}
             </button>
+            <button
+              className={`sync-btn${syncing ? " sync-btn--loading" : ""}${syncCooldownRemaining > 0 ? " sync-btn--cooldown" : ""}`}
+              onClick={syncLiveData}
+              disabled={syncing || syncCooldownRemaining > 0}
+              title={syncCooldownRemaining > 0 ? `Next sync available in ${Math.ceil(syncCooldownRemaining / 60000)} min` : "Pull latest prices from NSW Open Data"}
+            >
+              {syncing ? "⟳ Syncing…" : syncCooldownRemaining > 0 ? `⏳ ${Math.ceil(syncCooldownRemaining / 60000)}m` : "⬇ Sync"}
+            </button>
             {lastRefresh && (
               <span className="last-refresh" title={lastRefresh.toLocaleString()}>
                 Updated {timeAgo(lastRefresh, now)}
@@ -808,6 +851,12 @@ export default function App() {
         </div>
 
         {error && <div className="error-banner">⚠️ {error}</div>}
+        {syncMsg && (
+          <div className={`sync-result-banner${syncMsg.startsWith("⚠️") ? " sync-result-banner--error" : ""}`}>
+            {syncMsg}
+            <button className="sync-result-close" onClick={() => setSyncMsg(null)}>✕</button>
+          </div>
+        )}
 
         {/* ── Quick filter strip (mobile) ──────────────────────
             Always-visible fuel type + radius chips above the map.

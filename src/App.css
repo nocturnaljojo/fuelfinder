@@ -458,6 +458,39 @@ body {
 }
 .refresh-btn:hover { border-color: var(--accent); }
 .refresh-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Sync button ─────────────────────────────────────────────── */
+.sync-btn {
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.35);
+  border-radius: var(--radius); color: #22c55e;
+  padding: 5px 12px; font-size: 13px; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s; white-space: nowrap;
+}
+.sync-btn:hover { background: rgba(34,197,94,0.18); border-color: #22c55e; }
+.sync-btn--loading { opacity: 0.7; cursor: default; }
+.sync-btn--cooldown {
+  color: var(--muted); background: var(--surface2);
+  border-color: var(--border); cursor: default;
+}
+.sync-btn:disabled { cursor: default; }
+
+/* ── Sync result banner ───────────────────────────────────────── */
+.sync-result-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 8px 16px;
+  background: rgba(34,197,94,0.08); border-bottom: 1px solid rgba(34,197,94,0.2);
+  font-size: 12px; color: #4ade80;
+}
+.sync-result-banner--error {
+  background: rgba(239,68,68,0.08); border-bottom-color: rgba(239,68,68,0.2);
+  color: #f87171;
+}
+.sync-result-close {
+  background: none; border: none; color: inherit; cursor: pointer;
+  font-size: 14px; padding: 0 2px; opacity: 0.6; flex-shrink: 0;
+}
+.sync-result-close:hover { opacity: 1; }
+
 .last-refresh {
   font-size: 11px;
   color: #39ff14;
@@ -1932,6 +1965,7 @@ body {
   .last-refresh { display: none; }          /* no room; shown on desktop */
   .signin-btn   { padding: 5px 10px; font-size: 12px; }
   .refresh-btn  { padding: 5px 8px;  font-size: 12px; }
+  .sync-btn     { padding: 5px 8px;  font-size: 12px; }
 
   /* ── Map ── */
   .map-container { height: 30vh; min-height: 180px; }
