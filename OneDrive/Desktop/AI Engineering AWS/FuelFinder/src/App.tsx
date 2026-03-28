@@ -328,6 +328,11 @@ export default function App() {
   // "Scan this area" — tracks where the map is centred vs where data is loaded
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
+  const [mapZoom, setMapZoom] = useState(12);
+  // Refs so auto-scan logic can read latest values without stale closures
+  const latestMapCenterRef = useRef<[number, number] | null>(null);
+  const lastScanZoomRef    = useRef(12);
+  const autoScanTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Live data sync ────────────────────────────────────────────
   // Calls the edge function to pull latest prices from NSW Open Data API.
@@ -469,12 +474,14 @@ export default function App() {
 
   const showScanBtn = distFromMapCenter > 2; // show after 2km drift
 
-  async function handleScanArea() {
-    if (!mapCenter) return;
+  // Core scan logic — used by both the button and the auto-scan.
+  // Accepts an explicit center so it doesn't depend on mapCenter state.
+  async function doScan(center: [number, number]) {
+    if (scanLoading) return; // prevent overlapping scans
     setScanLoading(true);
     try {
-      // Reverse-geocode the map centre to get a friendly area name
-      const url = `https://nominatim.openstreetmap.org/reverse?lat=${mapCenter[0]}&lon=${mapCenter[1]}&format=json&zoom=10`;
+      const [lat, lng] = center;
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`;
       const res  = await fetch(url, { headers: { "Accept-Language": "en" } });
       const data = await res.json();
       const place =
@@ -488,11 +495,43 @@ export default function App() {
     } catch {
       setLocationName("this area");
     } finally {
-      setManualCoords([mapCenter[0], mapCenter[1]]);
+      setManualCoords(center);
       setMapCenter(null);
       setScanLoading(false);
     }
   }
+
+  // Manual button — uses mapCenter state (set by FuelMap onMapMove)
+  function handleScanArea() {
+    if (!mapCenter) return;
+    doScan(mapCenter);
+  }
+
+  // Auto-scan: triggers 750ms after the map stops moving when either:
+  //  • the user has panned > 2km from the current search centre, OR
+  //  • the user has zoomed out >= 2 levels (viewport grew significantly)
+  // Uses refs so the timeout always captures the latest position & zoom.
+  useEffect(() => {
+    const pannedFar = distFromMapCenter > 2;
+    const zoomedOut = mapZoom < lastScanZoomRef.current - 1.9;
+
+    if (!pannedFar && !zoomedOut) return;
+    if (scanLoading) return;
+
+    if (autoScanTimerRef.current) clearTimeout(autoScanTimerRef.current);
+
+    autoScanTimerRef.current = setTimeout(() => {
+      const center = latestMapCenterRef.current;
+      if (!center) return;
+      lastScanZoomRef.current = mapZoom;
+      doScan(center);
+    }, 750);
+
+    return () => {
+      if (autoScanTimerRef.current) clearTimeout(autoScanTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distFromMapCenter, mapZoom]);
 
   // Debounced suburb search — fires 350ms after the user stops typing
   const fetchSuggestions = useCallback(async (query: string) => {
@@ -894,7 +933,12 @@ export default function App() {
             userLat={userLat}
             userLng={userLng}
             onSelectStation={handleSelectStation}
-            onMapMove={(lat, lng) => setMapCenter([lat, lng])}
+            onMapMove={(lat, lng, zoom) => {
+              const c: [number, number] = [lat, lng];
+              latestMapCenterRef.current = c;
+              setMapCenter(c);
+              setMapZoom(zoom);
+            }}
           />
           {/* "Scan this area" button — floats over map when user pans away */}
           {showScanBtn && (

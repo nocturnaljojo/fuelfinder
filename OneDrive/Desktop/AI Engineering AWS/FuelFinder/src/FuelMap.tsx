@@ -15,7 +15,7 @@ interface FuelMapProps {
   userLat: number;
   userLng: number;
   onSelectStation: (station: Station) => void;
-  onMapMove?: (lat: number, lng: number) => void;
+  onMapMove?: (lat: number, lng: number, zoom: number) => void;
 }
 
 export default function FuelMap({ stations, userLat, userLng, onSelectStation, onMapMove }: FuelMapProps) {
@@ -38,10 +38,10 @@ export default function FuelMap({ stations, userLat, userLng, onSelectStation, o
       maxZoom: 19,
     }).addTo(map);
 
-    // Notify parent whenever the user pans or zooms
+    // Notify parent whenever the user pans or zooms (includes zoom level)
     map.on("moveend", () => {
       const c = map.getCenter();
-      onMapMoveRef.current?.(c.lat, c.lng);
+      onMapMoveRef.current?.(c.lat, c.lng, map.getZoom());
     });
 
     mapRef.current = map;
