@@ -172,7 +172,7 @@ const ROAD_LINES = [
 ];
 
 // ─── MAP PROJECTION ───────────────────────────────────────────────────────────
-const BOUNDS = {minLat:-35.285, maxLat:-35.175, minLng:149.118, maxLng:149.162};
+const BOUNDS = {minLat:-35.285, maxLat:-35.175, minLng:149.120, maxLng:149.156};
 const MW = 460, MH = 720, MP = 30;
 
 function toXY(lat, lng) {
@@ -347,6 +347,20 @@ function triPoints(px, py, dir, s=7) {
   return dir === "SB"
     ? `${px},${py+s} ${px-s*0.75},${py-s*0.55} ${px+s*0.75},${py-s*0.55}`
     : `${px},${py-s} ${px-s*0.75},${py+s*0.55} ${px+s*0.75},${py+s*0.55}`;
+}
+
+// ─── DUAL-TRACK OFFSET ────────────────────────────────────────────────────────
+// Returns a point offset perpendicularly from the polyline at position p.
+// pPrev / pNext define the direction vector; offset > 0 = left, < 0 = right.
+function offsetPoint(p, pPrev, pNext, offset) {
+  const from = pPrev || p;
+  const to   = pNext || p;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.sqrt(dx*dx + dy*dy) || 1;
+  const px = -dy / len;
+  const py =  dx / len;
+  return { x: p.x + px * offset, y: p.y + py * offset };
 }
 
 // ─── DEAD RECKONING ───────────────────────────────────────────────────────────
@@ -716,6 +730,17 @@ export default function CMETv4() {
   const routePts = ROUTE_WPT.map(w => toXY(w[0], w[1]));
   const routeD   = routePts.map((p,i) => (i===0?"M":"L")+p.x+","+p.y).join(" ");
 
+  // Dual-track offset paths: NB +3px left, SB -3px right of centre line
+  const nbTrackPts = routePts.map((p,i) =>
+    offsetPoint(p, routePts[i-1]||null, routePts[i+1]||null, +3));
+  const sbTrackPts = routePts.map((p,i) =>
+    offsetPoint(p, routePts[i-1]||null, routePts[i+1]||null, -3));
+  const nbTrackD = nbTrackPts.map((p,i) => (i===0?"M":"L")+p.x.toFixed(2)+","+p.y.toFixed(2)).join(" ");
+  const sbTrackD = sbTrackPts.map((p,i) => (i===0?"M":"L")+p.x.toFixed(2)+","+p.y.toFixed(2)).join(" ");
+  const sbTrackDRev = [...sbTrackPts].reverse()
+    .map((p,i) => (i===0?"M":"L")+p.x.toFixed(2)+","+p.y.toFixed(2)).join(" ");
+  const trackBedD = nbTrackD + " " + sbTrackDRev + " Z";
+
   const themes = {
     SAT:  {a:"#00ffaa", bg:"rgba(2,8,4,0.97)",   terr:"#030d07"},
     NV:   {a:"#44ff44", bg:"rgba(0,15,0,0.97)",  terr:"#001200"},
@@ -738,6 +763,7 @@ export default function CMETv4() {
     FLIR:"brightness(1.1) contrast(1.4) saturate(0) invert(1) hue-rotate(180deg)",
     CRT:"brightness(0.85) contrast(1.2)",
   };
+  const hasSel = sel.t !== null;
 
   // ── Satellite tile coordinates (computed per render when sat layer active) ──
   const satTiles = (() => {
@@ -1141,10 +1167,10 @@ export default function CMETv4() {
             })}
             {Array.from({length:40},(_,i) =>
               <line key={"gh"+i} x1={0} y1={i*20} x2="100%" y2={i*20}
-                stroke={th.a} strokeWidth={0.3} opacity={0.035}/>)}
+                stroke={th.a} strokeWidth={0.3} opacity={0.025}/>)}
             {Array.from({length:55},(_,i) =>
               <line key={"gv"+i} x1={i*20} y1={0} x2={i*20} y2="100%"
-                stroke={th.a} strokeWidth={0.3} opacity={0.035}/>)}
+                stroke={th.a} strokeWidth={0.3} opacity={0.025}/>)}
             {ROAD_LINES.map((road,ri) => {
               const pts = road.map(p=>toXY(p[0],p[1]));
               return <polyline key={"rd"+ri} points={pts.map(p=>p.x+","+p.y).join(" ")}
@@ -1166,26 +1192,26 @@ export default function CMETv4() {
             {[70,140,210,290].map((r,i) => (
               <g key={"rr"+i}>
                 <circle cx={cx} cy={cy} r={r} fill="none" stroke={th.a}
-                  strokeWidth={0.4} opacity={0.07} strokeDasharray="4,8"/>
-                <text x={cx+r+3} y={cy-3} fill={th.a} fontSize={6} opacity={0.1}>{(i+1)*3+"km"}</text>
+                  strokeWidth={0.4} opacity={0.04} strokeDasharray="4,8"/>
+                <text x={cx+r+3} y={cy-3} fill={th.a} fontSize={6} opacity={0.06}>{(i+1)*3+"km"}</text>
               </g>
             ))}
-            <line x1={cx} y1={0} x2={cx} y2={MH} stroke={th.a} strokeWidth={0.3} opacity={0.08}/>
-            <line x1={0} y1={cy} x2={MW} y2={cy} stroke={th.a} strokeWidth={0.3} opacity={0.08}/>
+            <line x1={cx} y1={0} x2={cx} y2={MH} stroke={th.a} strokeWidth={0.3} opacity={0.04}/>
+            <line x1={0} y1={cy} x2={MW} y2={cy} stroke={th.a} strokeWidth={0.3} opacity={0.04}/>
             {[-20,-10,10,20].map(d => (
               <g key={"tick"+d}>
-                <line x1={cx+d} y1={cy-4} x2={cx+d} y2={cy+4} stroke={th.a} strokeWidth={0.5} opacity={0.12}/>
-                <line x1={cx-4} y1={cy+d} x2={cx+4} y2={cy+d} stroke={th.a} strokeWidth={0.5} opacity={0.12}/>
+                <line x1={cx+d} y1={cy-4} x2={cx+d} y2={cy+4} stroke={th.a} strokeWidth={0.5} opacity={0.06}/>
+                <line x1={cx-4} y1={cy+d} x2={cx+4} y2={cy+d} stroke={th.a} strokeWidth={0.5} opacity={0.06}/>
               </g>
             ))}
             <line x1={cx} y1={cy}
               x2={cx+Math.cos(sweep*Math.PI/180)*300}
               y2={cy+Math.sin(sweep*Math.PI/180)*300}
-              stroke={th.a} strokeWidth={0.8} opacity={0.06}/>
+              stroke={th.a} strokeWidth={0.8} opacity={0.03}/>
             {[["N",-90],["E",0],["S",90],["W",180]].map(([label,angle]) => {
               const rad = angle*Math.PI/180;
               return <text key={"cp"+label} x={cx+Math.cos(rad)*310} y={cy+Math.sin(rad)*310+3}
-                fill={th.a} fontSize={9} fontWeight="bold" textAnchor="middle" opacity={0.2}>{label}</text>;
+                fill={th.a} fontSize={9} fontWeight="bold" textAnchor="middle" opacity={0.06}>{label}</text>;
             })}
           </svg>
 
@@ -1215,248 +1241,290 @@ export default function CMETv4() {
             )}
 
             {/* Suburb zone labels — hidden in sat mode */}
-            {!ly.sat && ZONES.map((z,i) => {
-              const p = toXY(z.lat, z.lng);
-              return (
-                <text key={"zn"+i} x={p.x} y={p.y} fill={th.a} opacity={0.10}
-                  fontSize={7} letterSpacing={4}
-                  fontFamily="'Courier New',monospace"
-                  transform={`rotate(${z.rot} ${p.x} ${p.y})`}>
-                  {z.label}
-                </text>
-              );
-            })}
+            {!ly.sat && (
+              <g opacity={hasSel ? 0.4 : 1}>
+                {ZONES.map((z,i) => {
+                  const p = toXY(z.lat, z.lng);
+                  return (
+                    <text key={"zn"+i} x={p.x} y={p.y} fill={th.a} opacity={0.06}
+                      fontSize={7} letterSpacing={4}
+                      fontFamily="'Courier New',monospace"
+                      transform={`rotate(${z.rot} ${p.x} ${p.y})`}>
+                      {z.label}
+                    </text>
+                  );
+                })}
+              </g>
+            )}
 
             {/* Rapid bus routes */}
-            {ly.bus && RAPID_ROUTES.map(r => {
-              const pts = r.lats.map((lat,i)=>toXY(lat,r.lngs[i]));
-              const d = pts.map((p,i)=>(i===0?"M":"L")+p.x+","+p.y).join(" ");
-              return (
-                <g key={"br"+r.id}>
-                  <path d={d} fill="none" stroke={r.color} strokeWidth={1.5}
-                    opacity={0.15} strokeDasharray="6,3"/>
-                  <text x={pts[0].x-5} y={pts[0].y-5} fill={r.color} fontSize={7}
-                    fontWeight="bold" opacity={0.4}>{r.id}</text>
-                </g>
-              );
-            })}
+            {ly.bus && (
+              <g opacity={hasSel ? 0.4 : 1}>
+                {RAPID_ROUTES.map(r => {
+                  const pts = r.lats.map((lat,i)=>toXY(lat,r.lngs[i]));
+                  const d = pts.map((p,i)=>(i===0?"M":"L")+p.x+","+p.y).join(" ");
+                  return (
+                    <g key={"br"+r.id}>
+                      <path d={d} fill="none" stroke={r.color} strokeWidth={1.5}
+                        opacity={0.15} strokeDasharray="6,3"/>
+                      <text x={pts[0].x-5} y={pts[0].y-5} fill={r.color} fontSize={7}
+                        fontWeight="bold" opacity={0.4}>{r.id}</text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
-            {/* LR Route — reduced opacity when sat imagery is behind it */}
+            {/* LR Route — glow halo + dual NB/SB rails + animated dash */}
             {ly.route && (
-              <g>
-                <path d={routeD} fill="none" stroke={th.a} strokeWidth={1}
-                  opacity={ly.sat?0.04:0.1}/>
-                <path d={routeD} fill="none" stroke={th.a} strokeWidth={2.5}
-                  opacity={ly.sat?0.15:0.3}
-                  strokeDasharray="6,4" strokeLinecap="round">
+              <g opacity={hasSel ? 0.55 : 1}>
+                {/* glow halo behind rails */}
+                <path d={routeD} fill="none" stroke={th.a} strokeWidth={14}
+                  opacity={0.06} style={{filter:"blur(3px)"}}/>
+                {/* track bed fill between rails */}
+                <path d={trackBedD} fill={th.a} fillOpacity={0.03} stroke="none"/>
+                {/* NB rail — left offset */}
+                <path d={nbTrackD} fill="none" stroke={th.a} strokeWidth={1.5} opacity={0.22}/>
+                {/* SB rail — right offset */}
+                <path d={sbTrackD} fill="none" stroke={th.a} strokeWidth={1.5} opacity={0.22}/>
+                {/* animated centre-line dash */}
+                <path d={routeD} fill="none" stroke={th.a} strokeWidth={2}
+                  opacity={ly.sat?0.10:0.22} strokeDasharray="6,4" strokeLinecap="round">
                   <animate attributeName="stroke-dashoffset" from="0" to="-20"
                     dur="1.5s" repeatCount="indefinite"/>
                 </path>
               </g>
             )}
 
-            {/* Road events — live data, falls back to static mock */}
-            {ly.events && activeRoads.map(e => {
-              const p = toXY(e.lat, e.lng);
-              const co = e.sev==="MAJOR"?"#ff3333":e.sev==="MOD"?"#ffaa00":"#88ff44";
-              const isSel = sel.t==="event" && D?.id===e.id;
-              return (
-                <g key={"ev"+e.id} onClick={()=>setSel({t:"event",d:e})} style={{cursor:"pointer"}}>
-                  {isSel && <circle cx={p.x} cy={p.y} r={14} fill="none" stroke={co}
-                    strokeWidth={1} opacity={0.4} strokeDasharray="3,2">
-                    <animate attributeName="r" values="10;16;10" dur="1.5s" repeatCount="indefinite"/>
-                  </circle>}
-                  <polygon points={p.x+","+(p.y-7)+" "+(p.x+6)+","+(p.y+4)+" "+(p.x-6)+","+(p.y+4)}
-                    fill={co+"22"} stroke={co} strokeWidth={1} opacity={0.7}/>
-                  <text x={p.x} y={p.y+2} textAnchor="middle" fill={co} fontSize={6} fontWeight="bold">!</text>
-                </g>
-              );
-            })}
-
-            {/* SL Faults */}
-            {ly.faults && FAULTS.map(f => {
-              const p = toXY(f.lat, f.lng);
-              const co = f.sev==="HIGH"?"#ff2222":"#ffaa00";
-              return (
-                <g key={"fl"+f.id} onClick={()=>setSel({t:"fault",d:f})} style={{cursor:"pointer"}}>
-                  <circle cx={p.x} cy={p.y} r={6} fill={co+"11"} stroke={co} strokeWidth={0.8} opacity={0.5}>
-                    <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite"/>
-                  </circle>
-                  <circle cx={p.x} cy={p.y} r={3} fill={co} opacity={0.6}/>
-                </g>
-              );
-            })}
-
-            {/* ESA incidents — live data, falls back to static mock */}
-            {ly.esa && activeESA.map(e => {
-              const p = toXY(e.lat, e.lng);
-              const co = ESA_COLORS[e.type];
-              return (
-                <g key={"esa"+e.id} onClick={()=>setSel({t:"esa",d:e})} style={{cursor:"pointer"}}>
-                  <circle cx={p.x} cy={p.y} r={20} fill="none" stroke={co} strokeWidth={1.5} opacity={0.12}>
-                    <animate attributeName="r" values="10;24;10" dur="1.2s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.3;0;0.3" dur="1.2s" repeatCount="indefinite"/>
-                  </circle>
-                  <circle cx={p.x} cy={p.y} r={6} fill={co+"44"} stroke={co} strokeWidth={1.5}/>
-                  <text x={p.x} y={p.y+4} textAnchor="middle" fontSize={10}>{ESA_ICONS[e.type]}</text>
-                  <text x={p.x+12} y={p.y-6} fill={co} fontSize={6} fontWeight="bold" fontFamily="monospace">{e.type}</text>
-                </g>
-              );
-            })}
-
-            {/* Landmarks */}
-            {ly.lm && LANDMARKS.map(l => {
-              const p = toXY(l.lat, l.lng);
-              return (
-                <g key={"lm"+l.id}>
-                  <text x={p.x} y={p.y+3} textAnchor="middle" fontSize={9} opacity={0.25}>{l.icon}</text>
-                  <text x={p.x+8} y={p.y+3} fill={th.a} fontSize={6} opacity={0.15} fontFamily="monospace">{l.n}</text>
-                </g>
-              );
-            })}
+            {/* Landmarks — below stops, heavily receded */}
+            {ly.lm && (
+              <g opacity={hasSel ? 0.35 : 1}>
+                {LANDMARKS.map(l => {
+                  const p = toXY(l.lat, l.lng);
+                  return (
+                    <g key={"lm"+l.id}>
+                      <text x={p.x} y={p.y+3} textAnchor="middle" fontSize={9} opacity={0.12}>{l.icon}</text>
+                      <text x={p.x+8} y={p.y+3} fill={th.a} fontSize={6} opacity={0.08} fontFamily="monospace">{l.n}</text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
             {/* Stops — IX squares 14×14, regular circles, smart label positioning */}
-            {ly.stops && STOPS.map(s => {
-              const p = toXY(s.lat, s.lng);
-              const isSel = sel.t==="stop" && D?.id===s.id;
-              // Label side logic:
-              // Flemington leg (1-8): all RIGHT — eastern corridor space is clear
-              // SWN (9): LEFT — the route bends west here
-              // Northbourne leg (10-14): alternate L/R to prevent vertical stacking
-              const onRight = s.id <= 8
-                ? true
-                : s.id === 9
-                  ? false
-                  : s.id % 2 === 1; // DKN(10)=L, MCR(11)=R, IPA(12)=L, ELA(13)=R, ALG(14)=L
-              const markerEdge = s.ix ? 8 : 4;
-              const gap = 5;
-              const lx = p.x + (onRight ? markerEdge + gap : -(markerEdge + gap));
-              const anchor = onRight ? "start" : "end";
-              // Tick line endpoint
-              const tx1 = p.x + (onRight ? markerEdge : -markerEdge);
-              const tx2 = p.x + (onRight ? markerEdge + gap - 1 : -(markerEdge + gap - 1));
-              // Optional vertical offset to clear crowded track areas (e.g. GGN, MCK)
-              const yo = s.labelYOff ?? 0;
+            {ly.stops && (
+              <g opacity={hasSel && sel.t !== "stop" ? 0.55 : 1}>
+                {STOPS.map(s => {
+                  const p = toXY(s.lat, s.lng);
+                  const isSel = sel.t==="stop" && D?.id===s.id;
+                  const onRight = s.id <= 8
+                    ? true
+                    : s.id === 9
+                      ? false
+                      : s.id % 2 === 1;
+                  const markerEdge = s.ix ? 8 : 4;
+                  const gap = 5;
+                  const lx = p.x + (onRight ? markerEdge + gap : -(markerEdge + gap));
+                  const anchor = onRight ? "start" : "end";
+                  const tx1 = p.x + (onRight ? markerEdge : -markerEdge);
+                  const tx2 = p.x + (onRight ? markerEdge + gap - 1 : -(markerEdge + gap - 1));
+                  const yo = s.labelYOff ?? 0;
 
-              return (
-                <g key={"st"+s.id} onClick={()=>setSel({t:"stop",d:s})} style={{cursor:"pointer"}}>
-                  {isSel && <circle cx={p.x} cy={p.y} r={13} fill="none" stroke={th.a}
-                    strokeWidth={0.8} opacity={0.35}>
-                    <animate attributeName="r" values="9;15;9" dur="2s" repeatCount="indefinite"/>
-                  </circle>}
+                  return (
+                    <g key={"st"+s.id} onClick={()=>setSel({t:"stop",d:s})} style={{cursor:"pointer"}}>
+                      {isSel && <circle cx={p.x} cy={p.y} r={13} fill="none" stroke={th.a}
+                        strokeWidth={0.8} opacity={0.35}>
+                        <animate attributeName="r" values="9;15;9" dur="2s" repeatCount="indefinite"/>
+                      </circle>}
 
-                  {/* Marker */}
-                  {s.ix ? (
-                    <g>
-                      <rect x={p.x-7} y={p.y-7} width={14} height={14}
-                        fill={isSel?th.a+"44":"#00000099"} stroke={th.a}
-                        strokeWidth={isSel?2:1.5} rx={1}/>
-                      <text x={p.x} y={p.y+3} textAnchor="middle" fill={th.a}
-                        fontSize={6} fontWeight="bold" opacity={0.9}>IX</text>
+                      {/* Marker */}
+                      {s.ix ? (
+                        <g>
+                          <rect x={p.x-7} y={p.y-7} width={14} height={14}
+                            fill={isSel?th.a+"44":"#00000099"} stroke={th.a}
+                            strokeWidth={isSel?2:1.5} rx={1}/>
+                          <text x={p.x} y={p.y+3} textAnchor="middle" fill={th.a}
+                            fontSize={6} fontWeight="bold" opacity={0.9}>IX</text>
+                        </g>
+                      ) : (
+                        <circle cx={p.x} cy={p.y} r={isSel?4:3}
+                          fill={isSel?th.a:"#000"} stroke={th.a} strokeWidth={1.2}
+                          opacity={isSel?1:0.45}/>
+                      )}
+
+                      {/* Connector tick */}
+                      <line x1={tx1} y1={p.y} x2={tx2} y2={p.y+yo}
+                        stroke={th.a} strokeWidth={0.6} opacity={isSel?0.5:0.10}/>
+
+                      {/* Stop code */}
+                      <text x={lx} y={p.y+yo+2} textAnchor={anchor} fill={th.a}
+                        fontSize={s.ix?8.5:7.5} fontWeight="bold" letterSpacing={1}
+                        opacity={isSel?1:s.ix?0.75:0.45} fontFamily="monospace">
+                        {s.code}
+                      </text>
+
+                      {/* Stop name */}
+                      <text x={lx} y={p.y+yo+11} textAnchor={anchor} fill={th.a}
+                        fontSize={s.ix?7:6} opacity={isSel?0.85:s.ix?0.40:0.22}
+                        fontFamily="monospace">
+                        {s.name.toUpperCase()}
+                      </text>
+
+                      {/* Bus interchange routes */}
+                      {s.ix && s.busR.length > 0 &&
+                        <text x={lx} y={p.y+yo+20} textAnchor={anchor} fill={th.a}
+                          fontSize={5.5} opacity={0.18} fontFamily="monospace" letterSpacing={1}>
+                          {s.busR.join("·")}
+                        </text>}
                     </g>
-                  ) : (
-                    <circle cx={p.x} cy={p.y} r={isSel?4:3}
-                      fill={isSel?th.a:"#000"} stroke={th.a} strokeWidth={1.2}
-                      opacity={isSel?1:0.65}/>
-                  )}
+                  );
+                })}
+              </g>
+            )}
 
-                  {/* Connector tick — angled when label is offset */}
-                  <line x1={tx1} y1={p.y} x2={tx2} y2={p.y+yo}
-                    stroke={th.a} strokeWidth={0.6} opacity={isSel?0.5:0.18}/>
+            {/* Road events — ABOVE stops so they pop over the anchor layer */}
+            {ly.events && (
+              <g opacity={hasSel && sel.t !== "event" ? 0.55 : 1}>
+                {activeRoads.map(e => {
+                  const p = toXY(e.lat, e.lng);
+                  const co = e.sev==="MAJOR"?"#ff3333":e.sev==="MOD"?"#ffaa00":"#88ff44";
+                  const isSel = sel.t==="event" && D?.id===e.id;
+                  return (
+                    <g key={"ev"+e.id} onClick={()=>setSel({t:"event",d:e})} style={{cursor:"pointer"}}>
+                      {isSel && <circle cx={p.x} cy={p.y} r={14} fill="none" stroke={co}
+                        strokeWidth={1} opacity={0.4} strokeDasharray="3,2">
+                        <animate attributeName="r" values="10;18;10" dur="1.5s" repeatCount="indefinite"/>
+                      </circle>}
+                      <polygon points={p.x+","+(p.y-9)+" "+(p.x+8)+","+(p.y+5)+" "+(p.x-8)+","+(p.y+5)}
+                        fill={co+"22"} stroke={co} strokeWidth={1.2} opacity={0.85}/>
+                      <text x={p.x} y={p.y+3} textAnchor="middle" fill={co} fontSize={7} fontWeight="bold">!</text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
-                  {/* Stop code — prominent identifier */}
-                  <text x={lx} y={p.y+yo+2} textAnchor={anchor} fill={th.a}
-                    fontSize={s.ix?8.5:7.5} fontWeight="bold" letterSpacing={1}
-                    opacity={isSel?1:s.ix?0.85:0.65} fontFamily="monospace">
-                    {s.code}
-                  </text>
+            {/* SL Faults — ABOVE stops, slow pulse glow ring */}
+            {ly.faults && (
+              <g opacity={hasSel && sel.t !== "fault" ? 0.55 : 1}>
+                {FAULTS.map(f => {
+                  const p = toXY(f.lat, f.lng);
+                  const co = f.sev==="HIGH"?"#ff2222":"#ffaa00";
+                  return (
+                    <g key={"fl"+f.id} onClick={()=>setSel({t:"fault",d:f})} style={{cursor:"pointer"}}>
+                      {/* slow outer pulse ring */}
+                      <circle cx={p.x} cy={p.y} r={10} fill="none" stroke={co} strokeWidth={0.8} opacity={0}>
+                        <animate attributeName="r" values="6;14;6" dur="3s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0.4;0;0.4" dur="3s" repeatCount="indefinite"/>
+                      </circle>
+                      <circle cx={p.x} cy={p.y} r={6} fill={co+"11"} stroke={co} strokeWidth={0.8} opacity={0.5}>
+                        <animate attributeName="opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite"/>
+                      </circle>
+                      <circle cx={p.x} cy={p.y} r={3} fill={co} opacity={0.7}/>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
-                  {/* Stop name — secondary, smaller */}
-                  <text x={lx} y={p.y+yo+11} textAnchor={anchor} fill={th.a}
-                    fontSize={s.ix?7:6} opacity={isSel?0.85:s.ix?0.55:0.38}
-                    fontFamily="monospace">
-                    {s.name.toUpperCase()}
-                  </text>
+            {/* ESA incidents — ABOVE stops, larger pulse rings */}
+            {ly.esa && (
+              <g opacity={hasSel && sel.t !== "esa" ? 0.55 : 1}>
+                {activeESA.map(e => {
+                  const p = toXY(e.lat, e.lng);
+                  const co = ESA_COLORS[e.type];
+                  return (
+                    <g key={"esa"+e.id} onClick={()=>setSel({t:"esa",d:e})} style={{cursor:"pointer"}}>
+                      <circle cx={p.x} cy={p.y} r={20} fill="none" stroke={co} strokeWidth={1.5} opacity={0.12}>
+                        <animate attributeName="r" values="12;30;12" dur="1.2s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0.35;0;0.35" dur="1.2s" repeatCount="indefinite"/>
+                      </circle>
+                      <circle cx={p.x} cy={p.y} r={7} fill={co+"44"} stroke={co} strokeWidth={1.8}/>
+                      <text x={p.x} y={p.y+4} textAnchor="middle" fontSize={11}>{ESA_ICONS[e.type]}</text>
+                      <text x={p.x+13} y={p.y-7} fill={co} fontSize={6.5} fontWeight="bold" fontFamily="monospace">{e.type}</text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
-                  {/* Bus interchange routes — tertiary info */}
-                  {s.ix && s.busR.length > 0 &&
-                    <text x={lx} y={p.y+yo+20} textAnchor={anchor} fill={th.a}
-                      fontSize={5.5} opacity={0.28} fontFamily="monospace" letterSpacing={1}>
-                      {s.busR.join("·")}
-                    </text>}
-                </g>
-              );
-            })}
-
-            {/* Cameras */}
-            {ly.cam && CAMS.map(cam => {
-              const p = toXY(cam.lat, cam.lng);
-              const co = cam.s==="ON"?"#00ccff":cam.s==="DG"?"#ffaa00":"#ff3333";
-              const isSel = sel.t==="cam" && D?.id===cam.id;
-              return (
-                <g key={"cm"+cam.id} onClick={()=>setSel({t:"cam",d:cam})} style={{cursor:"pointer"}}>
-                  <rect x={p.x-2} y={p.y-2} width={4} height={4} fill={co}
-                    opacity={isSel?1:0.5} transform={"rotate(45 "+p.x+" "+p.y+")"}/>
-                  {isSel && <circle cx={p.x} cy={p.y} r={9} fill="none" stroke={co}
-                    strokeWidth={0.6} opacity={0.4} strokeDasharray="2,2"/>}
-                </g>
-              );
-            })}
+            {/* Cameras — pushed back, small diamonds */}
+            {ly.cam && (
+              <g opacity={hasSel && sel.t !== "cam" ? 0.4 : 1}>
+                {CAMS.map(cam => {
+                  const p = toXY(cam.lat, cam.lng);
+                  const co = cam.s==="ON"?"#00ccff":cam.s==="DG"?"#ffaa00":"#ff3333";
+                  const isSel = sel.t==="cam" && D?.id===cam.id;
+                  return (
+                    <g key={"cm"+cam.id} onClick={()=>setSel({t:"cam",d:cam})} style={{cursor:"pointer"}}>
+                      <rect x={p.x-2} y={p.y-2} width={4} height={4} fill={co}
+                        opacity={isSel?1:0.25} transform={"rotate(45 "+p.x+" "+p.y+")"}/>
+                      {isSel && <circle cx={p.x} cy={p.y} r={9} fill="none" stroke={co}
+                        strokeWidth={0.6} opacity={0.4} strokeDasharray="2,2"/>}
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
             {/* Trams — direction triangles with callout labels */}
-            {ly.trams && displayTrams.map(t => {
-              const p = toXY(t.lat, t.lng);
-              const isSel     = sel.t==="tram" && D?.id===t.id;
-              const isTerminal = t.status === "TERMINAL";
-              const triS  = isSel ? 8 : 6;
-              const arrow = t.dir === "SB" ? "▼" : "▲";
-              const labelW = isSel ? 60 : 50;
-              const labelH = isSel ? 24 : 20;
-              const pillX = p.x - labelW / 2;
-              const pillY = p.y - triS - 6 - labelH;
-              return (
-                <g key={"tm"+t.id} onClick={()=>setSel({t:"tram",d:t})}
-                  style={{cursor:"pointer", opacity: isTerminal ? 0.30 : 1}}>
-                  {/* glow halo — slower pulse for terminal */}
-                  <circle cx={p.x} cy={p.y} r={isSel?18:10} fill={t.c} opacity={0.05}>
-                    <animate attributeName="r"
-                      values={isSel?"14;20;14":"8;12;8"}
-                      dur={isTerminal?"3s":"1.5s"}
-                      repeatCount="indefinite"/>
-                  </circle>
-                  {/* direction triangle */}
-                  <polygon
-                    points={triPoints(p.x, p.y, t.dir, triS)}
-                    fill={t.c}
-                    stroke={isSel?"#fff":t.c}
-                    strokeWidth={isSel?1.5:0.6}
-                    style={{filter:`drop-shadow(0 0 3px ${t.c})`}}
-                  />
-                  {/* callout connector */}
-                  <line x1={p.x} y1={pillY+labelH} x2={p.x} y2={p.y-triS}
-                    stroke={t.c} strokeWidth={0.5} opacity={isSel?0.5:0.3}
-                    strokeDasharray={isTerminal?"3,2":isSel?"none":"2,1"}/>
-                  {/* label pill */}
-                  <rect x={pillX} y={pillY} width={labelW} height={labelH}
-                    fill="#000a04" fillOpacity={0.90}
-                    stroke={isTerminal?"#ffaa00":t.c}
-                    strokeWidth={isSel?1:0.5} rx={2}
-                    strokeDasharray={isTerminal?"3,2":"none"}/>
-                  {/* ID — primary */}
-                  <text x={p.x} y={pillY+(isSel?10:9)} textAnchor="middle"
-                    fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?7.5:7} fontWeight="bold"
-                    fontFamily="monospace" letterSpacing={0.5}>
-                    {t.id+" "+(isTerminal?"⊡":arrow)}
-                  </text>
-                  {/* secondary line */}
-                  <text x={p.x} y={pillY+(isSel?19:16)} textAnchor="middle"
-                    fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?6:5.5} opacity={0.55}
-                    fontFamily="monospace">
-                    {isTerminal?"TERMINAL":t.speed+"km/h · "+(t.status==="STOPPED"?"STP":"MVG")}
-                  </text>
-                </g>
-              );
-            })}
+            {ly.trams && (
+              <g opacity={hasSel && sel.t !== "tram" ? 0.55 : 1}>
+                {displayTrams.map(t => {
+                  const p = toXY(t.lat, t.lng);
+                  const isSel     = sel.t==="tram" && D?.id===t.id;
+                  const isTerminal = t.status === "TERMINAL";
+                  const triS  = isSel ? 10 : 9;
+                  const arrow = t.dir === "SB" ? "▼" : "▲";
+                  const labelW = isSel ? 62 : 52;
+                  const labelH = isSel ? 24 : 20;
+                  const pillX = p.x - labelW / 2;
+                  const pillY = p.y - triS - 6 - labelH;
+                  return (
+                    <g key={"tm"+t.id} onClick={()=>setSel({t:"tram",d:t})}
+                      style={{cursor:"pointer", opacity: isTerminal ? 0.30 : 1}}>
+                      {/* glow halo — slower pulse for terminal */}
+                      <circle cx={p.x} cy={p.y} r={isSel?18:12} fill={t.c} opacity={0.07}>
+                        <animate attributeName="r"
+                          values={isSel?"14;22;14":"9;14;9"}
+                          dur={isTerminal?"3s":"1.5s"}
+                          repeatCount="indefinite"/>
+                      </circle>
+                      {/* direction triangle */}
+                      <polygon
+                        points={triPoints(p.x, p.y, t.dir, triS)}
+                        fill={t.c}
+                        stroke={isSel?"#fff":t.c}
+                        strokeWidth={isSel?1.5:0.8}
+                        style={{filter:`drop-shadow(0 0 4px ${t.c})`}}
+                      />
+                      {/* callout connector */}
+                      <line x1={p.x} y1={pillY+labelH} x2={p.x} y2={p.y-triS}
+                        stroke={t.c} strokeWidth={0.7} opacity={isSel?0.6:0.45}
+                        strokeDasharray={isTerminal?"3,2":isSel?"none":"2,1"}/>
+                      {/* label pill */}
+                      <rect x={pillX} y={pillY} width={labelW} height={labelH}
+                        fill="#000a04" fillOpacity={0.92}
+                        stroke={isTerminal?"#ffaa00":t.c}
+                        strokeWidth={isSel?1.5:0.8} rx={2}
+                        strokeDasharray={isTerminal?"3,2":"none"}/>
+                      {/* ID — primary */}
+                      <text x={p.x} y={pillY+(isSel?10:9)} textAnchor="middle"
+                        fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?7.5:7} fontWeight="bold"
+                        fontFamily="monospace" letterSpacing={0.5}>
+                        {t.id+" "+(isTerminal?"⊡":arrow)}
+                      </text>
+                      {/* secondary line */}
+                      <text x={p.x} y={pillY+(isSel?19:16)} textAnchor="middle"
+                        fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?6:5.5} opacity={0.65}
+                        fontFamily="monospace">
+                        {isTerminal?"TERMINAL":t.speed+"km/h · "+(t.status==="STOPPED"?"STP":"MVG")}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
           </svg>
 
