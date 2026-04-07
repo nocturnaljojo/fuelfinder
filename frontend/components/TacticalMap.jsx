@@ -1180,7 +1180,7 @@ export default function CMETv4() {
               HUD overlays, vignette, zoom controls, speed profile stay OUTSIDE.      */}
           <div style={{
             position:"absolute", inset:0,
-            transform: rotated ? "rotate(30deg) scale(1.2)" : "none",
+            transform: rotated ? "rotate(30deg) scale(1.05)" : "none",
             transformOrigin: "center center",
             transition: "transform 0.4s ease",
           }}>
@@ -1497,6 +1497,16 @@ export default function CMETv4() {
                   const isSel     = sel.t==="tram" && D?.id===t.id;
                   const isTerminal = t.status === "TERMINAL";
                   const triS  = isSel ? 10 : 9;
+                  // Align triangle to local track direction so it follows the corridor
+                  // regardless of map rotation. segA→segB gives SB bearing in SVG space.
+                  const segA = t.seg != null ? toXY(STOPS[t.seg].lat, STOPS[t.seg].lng) : p;
+                  const segB = t.seg != null ? toXY(STOPS[Math.min(t.seg+1, STOPS.length-1)].lat, STOPS[Math.min(t.seg+1, STOPS.length-1)].lng) : p;
+                  const trackAngle = (segA.x !== segB.x || segA.y !== segB.y)
+                    ? Math.atan2(segB.y - segA.y, segB.x - segA.x) * 180 / Math.PI
+                    : (t.dir === "SB" ? 90 : -90);
+                  // SB apex was naturally at 90° (down); rotate by (trackAngle - 90) to align.
+                  // NB apex was at -90° (up); same rotation puts it at trackAngle+180°. Both correct.
+                  const triAngle = trackAngle - 90;
                   const arrow = t.dir === "SB" ? "▼" : "▲";
                   const labelW = isSel ? 62 : 52;
                   const labelH = isSel ? 24 : 20;
@@ -1512,13 +1522,14 @@ export default function CMETv4() {
                           dur={isTerminal?"3s":"1.5s"}
                           repeatCount="indefinite"/>
                       </circle>
-                      {/* direction triangle */}
+                      {/* direction triangle — rotated to follow local track bearing */}
                       <polygon
                         points={triPoints(p.x, p.y, t.dir, triS)}
                         fill={t.c}
                         stroke={isSel?"#fff":t.c}
                         strokeWidth={isSel?1.5:0.8}
                         style={{filter:`drop-shadow(0 0 4px ${t.c})`}}
+                        transform={`rotate(${triAngle.toFixed(1)} ${p.x} ${p.y})`}
                       />
                       {/* callout connector */}
                       <line x1={p.x} y1={pillY+labelH} x2={p.x} y2={p.y-triS}
