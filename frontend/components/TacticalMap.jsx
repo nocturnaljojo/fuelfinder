@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -172,7 +172,7 @@ const ROAD_LINES = [
 ];
 
 // ─── MAP PROJECTION ───────────────────────────────────────────────────────────
-const BOUNDS = {minLat:-35.285, maxLat:-35.175, minLng:149.120, maxLng:149.156};
+const BOUNDS = {minLat:-35.285, maxLat:-35.175, minLng:149.118, maxLng:149.155};
 const MW = 460, MH = 720, MP = 30;
 
 function toXY(lat, lng) {
@@ -463,7 +463,7 @@ export default function CMETv4() {
   const cx = MW / 2, cy = MH / 2;
 
   // ── Zoom & Pan handlers ──────────────────────────────────────────────────
-  const handleWheel = (e) => {
+  const handleWheel = useCallback((e) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
     setView(prev => {
@@ -482,7 +482,7 @@ export default function CMETv4() {
         y: Math.max(0, Math.min(MH - MH / newZ, ny)),
       };
     });
-  };
+  }, []);
 
   const handleMouseDown = (e) => {
     // Middle or left button only; ignore clicks on interactive children via target check
@@ -523,7 +523,7 @@ export default function CMETv4() {
     if (!el) return;
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [handleWheel]);
 
   // Clock, radar sweep, activity log, dead-reckoned tram positions
   useEffect(() => {
@@ -576,7 +576,10 @@ export default function CMETv4() {
             ghostsRef.current.delete(t.vehicle_label);
           }
           const snap = snapAndLocate(t.latitude, t.longitude);
-          const dir  = t.bearing > 90 && t.bearing < 270 ? "SB" : "NB";
+          const prevDir = tramStateRef.current.find(p => p.id === t.vehicle_label)?.dir ?? null;
+          const dir  = t.bearing === 0 && prevDir
+            ? prevDir
+            : (t.bearing >= 90 && t.bearing <= 270 ? "SB" : "NB");
           return {
             id:        t.vehicle_label,
             lat:       snap.lat,
@@ -977,7 +980,7 @@ export default function CMETv4() {
 
       {/* HEADER */}
       <div style={{borderBottom:"1px solid "+th.a+"25",padding:"5px 10px",display:"flex",
-        justifyContent:"space-between",alignItems:"center",background:th.bg,zIndex:10,position:"relative"}}>
+        justifyContent:"space-between",alignItems:"center",background:th.bg,zIndex:10,position:"relative",overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:7,height:7,borderRadius:"50%",background:th.a,
             boxShadow:"0 0 6px "+th.a,animation:"pulse 2s infinite"}} />
@@ -1167,10 +1170,10 @@ export default function CMETv4() {
             })}
             {Array.from({length:40},(_,i) =>
               <line key={"gh"+i} x1={0} y1={i*20} x2="100%" y2={i*20}
-                stroke={th.a} strokeWidth={0.3} opacity={0.025}/>)}
+                stroke={th.a} strokeWidth={0.3} opacity={0.03}/>)}
             {Array.from({length:55},(_,i) =>
               <line key={"gv"+i} x1={i*20} y1={0} x2={i*20} y2="100%"
-                stroke={th.a} strokeWidth={0.3} opacity={0.025}/>)}
+                stroke={th.a} strokeWidth={0.3} opacity={0.03}/>)}
             {ROAD_LINES.map((road,ri) => {
               const pts = road.map(p=>toXY(p[0],p[1]));
               return <polyline key={"rd"+ri} points={pts.map(p=>p.x+","+p.y).join(" ")}
@@ -1277,7 +1280,7 @@ export default function CMETv4() {
 
             {/* LR Route — glow halo + dual NB/SB rails + animated dash */}
             {ly.route && (
-              <g opacity={hasSel ? 0.55 : 1}>
+              <g opacity={hasSel ? 0.60 : 1}>
                 {/* glow halo behind rails */}
                 <path d={routeD} fill="none" stroke={th.a} strokeWidth={14}
                   opacity={0.06} style={{filter:"blur(3px)"}}/>
@@ -1303,8 +1306,8 @@ export default function CMETv4() {
                   const p = toXY(l.lat, l.lng);
                   return (
                     <g key={"lm"+l.id}>
-                      <text x={p.x} y={p.y+3} textAnchor="middle" fontSize={9} opacity={0.12}>{l.icon}</text>
-                      <text x={p.x+8} y={p.y+3} fill={th.a} fontSize={6} opacity={0.08} fontFamily="monospace">{l.n}</text>
+                      <text x={p.x} y={p.y+3} textAnchor="middle" fontSize={9} opacity={0.20}>{l.icon}</text>
+                      <text x={p.x+8} y={p.y+3} fill={th.a} fontSize={6} opacity={0.12} fontFamily="monospace">{l.n}</text>
                     </g>
                   );
                 })}
@@ -1313,7 +1316,7 @@ export default function CMETv4() {
 
             {/* Stops — IX squares 14×14, regular circles, smart label positioning */}
             {ly.stops && (
-              <g opacity={hasSel && sel.t !== "stop" ? 0.55 : 1}>
+              <g opacity={hasSel && sel.t !== "stop" ? 0.60 : 1}>
                 {STOPS.map(s => {
                   const p = toXY(s.lat, s.lng);
                   const isSel = sel.t==="stop" && D?.id===s.id;
@@ -1359,13 +1362,13 @@ export default function CMETv4() {
                       {/* Stop code */}
                       <text x={lx} y={p.y+yo+2} textAnchor={anchor} fill={th.a}
                         fontSize={s.ix?8.5:7.5} fontWeight="bold" letterSpacing={1}
-                        opacity={isSel?1:s.ix?0.75:0.45} fontFamily="monospace">
+                        opacity={isSel?1:s.ix?0.70:0.50} fontFamily="monospace">
                         {s.code}
                       </text>
 
                       {/* Stop name */}
                       <text x={lx} y={p.y+yo+11} textAnchor={anchor} fill={th.a}
-                        fontSize={s.ix?7:6} opacity={isSel?0.85:s.ix?0.40:0.22}
+                        fontSize={s.ix?7:6} opacity={isSel?0.85:0.35}
                         fontFamily="monospace">
                         {s.name.toUpperCase()}
                       </text>
@@ -1384,7 +1387,7 @@ export default function CMETv4() {
 
             {/* Road events — ABOVE stops so they pop over the anchor layer */}
             {ly.events && (
-              <g opacity={hasSel && sel.t !== "event" ? 0.55 : 1}>
+              <g opacity={hasSel && sel.t !== "event" ? 0.60 : 1}>
                 {activeRoads.map(e => {
                   const p = toXY(e.lat, e.lng);
                   const co = e.sev==="MAJOR"?"#ff3333":e.sev==="MOD"?"#ffaa00":"#88ff44";
@@ -1406,7 +1409,7 @@ export default function CMETv4() {
 
             {/* SL Faults — ABOVE stops, slow pulse glow ring */}
             {ly.faults && (
-              <g opacity={hasSel && sel.t !== "fault" ? 0.55 : 1}>
+              <g opacity={hasSel && sel.t !== "fault" ? 0.60 : 1}>
                 {FAULTS.map(f => {
                   const p = toXY(f.lat, f.lng);
                   const co = f.sev==="HIGH"?"#ff2222":"#ffaa00";
@@ -1429,7 +1432,7 @@ export default function CMETv4() {
 
             {/* ESA incidents — ABOVE stops, larger pulse rings */}
             {ly.esa && (
-              <g opacity={hasSel && sel.t !== "esa" ? 0.55 : 1}>
+              <g opacity={hasSel && sel.t !== "esa" ? 0.60 : 1}>
                 {activeESA.map(e => {
                   const p = toXY(e.lat, e.lng);
                   const co = ESA_COLORS[e.type];
@@ -1458,7 +1461,7 @@ export default function CMETv4() {
                   return (
                     <g key={"cm"+cam.id} onClick={()=>setSel({t:"cam",d:cam})} style={{cursor:"pointer"}}>
                       <rect x={p.x-2} y={p.y-2} width={4} height={4} fill={co}
-                        opacity={isSel?1:0.25} transform={"rotate(45 "+p.x+" "+p.y+")"}/>
+                        opacity={isSel?1:0.30} transform={"rotate(45 "+p.x+" "+p.y+")"}/>
                       {isSel && <circle cx={p.x} cy={p.y} r={9} fill="none" stroke={co}
                         strokeWidth={0.6} opacity={0.4} strokeDasharray="2,2"/>}
                     </g>
@@ -1469,7 +1472,7 @@ export default function CMETv4() {
 
             {/* Trams — direction triangles with callout labels */}
             {ly.trams && (
-              <g opacity={hasSel && sel.t !== "tram" ? 0.55 : 1}>
+              <g opacity={hasSel && sel.t !== "tram" ? 0.60 : 1}>
                 {displayTrams.map(t => {
                   const p = toXY(t.lat, t.lng);
                   const isSel     = sel.t==="tram" && D?.id===t.id;
