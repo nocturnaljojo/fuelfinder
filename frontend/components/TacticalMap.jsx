@@ -777,6 +777,8 @@ export default function CMETv4() {
     CRT:"brightness(0.85) contrast(1.2)",
   };
   const hasSel = sel.t !== null;
+  const diagX = rotated ? 83 : 0;
+  const diagY = rotated ? -9 : 0;
 
   // ── Satellite tile coordinates (computed per render when sat layer active) ──
   const satTiles = (() => {
@@ -1210,12 +1212,13 @@ export default function CMETv4() {
 
           {/* Scope / radar overlay — vignette removed (it lives in the CSS div outside) */}
           <svg width={MW} height={MH} viewBox={"0 0 "+MW+" "+MH}
-            style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:8}}>
+            style={{position:"absolute",left:"50%",top:"50%",marginLeft:-(MW/2),marginTop:-(MH/2),pointerEvents:"none",zIndex:8}}>
             {[70,140,210,290].map((r,i) => (
               <g key={"rr"+i}>
                 <circle cx={cx} cy={cy} r={r} fill="none" stroke={th.a}
                   strokeWidth={0.4} opacity={0.04} strokeDasharray="4,8"/>
-                <text x={cx+r+3} y={cy-3} fill={th.a} fontSize={6} opacity={0.06}>{(i+1)*3+"km"}</text>
+                <text x={cx+r+3} y={cy-3} fill={th.a} fontSize={6} opacity={0.06}
+                  transform={rotated ? `rotate(-30 ${cx+r+3} ${cy-3})` : undefined}>{(i+1)*3+"km"}</text>
               </g>
             ))}
             <line x1={cx} y1={0} x2={cx} y2={MH} stroke={th.a} strokeWidth={0.3} opacity={0.04}/>
@@ -1232,8 +1235,10 @@ export default function CMETv4() {
               stroke={th.a} strokeWidth={0.8} opacity={0.03}/>
             {[["N",-90],["E",0],["S",90],["W",180]].map(([label,angle]) => {
               const rad = angle*Math.PI/180;
-              return <text key={"cp"+label} x={cx+Math.cos(rad)*310} y={cy+Math.sin(rad)*310+3}
-                fill={th.a} fontSize={9} fontWeight="bold" textAnchor="middle" opacity={0.06}>{label}</text>;
+              const tx = cx+Math.cos(rad)*310, ty = cy+Math.sin(rad)*310+3;
+              return <text key={"cp"+label} x={tx} y={ty}
+                fill={th.a} fontSize={9} fontWeight="bold" textAnchor="middle" opacity={0.06}
+                transform={rotated ? `rotate(-30 ${tx} ${ty})` : undefined}>{label}</text>;
             })}
           </svg>
 
@@ -1241,8 +1246,8 @@ export default function CMETv4() {
           <svg
             ref={mapSvgRef}
             width={MW} height={MH}
-            viewBox={`${view.x.toFixed(1)} ${view.y.toFixed(1)} ${(MW/view.z).toFixed(1)} ${(MH/view.z).toFixed(1)}`}
-            style={{position:"relative", zIndex:5, cursor:"grab"}}
+            viewBox={`${(view.x + diagX).toFixed(1)} ${(view.y + diagY).toFixed(1)} ${(MW/view.z).toFixed(1)} ${(MH/view.z).toFixed(1)}`}
+            style={{position:"absolute",left:"50%",top:"50%",marginLeft:-(MW/2),marginTop:-(MH/2), zIndex:5, cursor:"grab"}}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -1271,7 +1276,7 @@ export default function CMETv4() {
                     <text key={"zn"+i} x={p.x} y={p.y} fill={th.a} opacity={0.06}
                       fontSize={7} letterSpacing={4}
                       fontFamily="'Courier New',monospace"
-                      transform={`rotate(${z.rot} ${p.x} ${p.y})`}>
+                      transform={`rotate(${z.rot + (rotated ? -30 : 0)} ${p.x} ${p.y})`}>
                       {z.label}
                     </text>
                   );
@@ -1290,7 +1295,8 @@ export default function CMETv4() {
                       <path d={d} fill="none" stroke={r.color} strokeWidth={1.5}
                         opacity={0.15} strokeDasharray="6,3"/>
                       <text x={pts[0].x-5} y={pts[0].y-5} fill={r.color} fontSize={7}
-                        fontWeight="bold" opacity={0.4}>{r.id}</text>
+                        fontWeight="bold" opacity={0.4}
+                        transform={rotated ? `rotate(-30 ${pts[0].x-5} ${pts[0].y-5})` : undefined}>{r.id}</text>
                     </g>
                   );
                 })}
@@ -1325,8 +1331,10 @@ export default function CMETv4() {
                   const p = toXY(l.lat, l.lng);
                   return (
                     <g key={"lm"+l.id}>
-                      <text x={p.x} y={p.y+3} textAnchor="middle" fontSize={9} opacity={0.20}>{l.icon}</text>
-                      <text x={p.x+8} y={p.y+3} fill={th.a} fontSize={6} opacity={0.12} fontFamily="monospace">{l.n}</text>
+                      <text x={p.x} y={p.y+3} textAnchor="middle" fontSize={9} opacity={0.20}
+                        transform={rotated ? `rotate(-30 ${p.x} ${p.y+3})` : undefined}>{l.icon}</text>
+                      <text x={p.x+8} y={p.y+3} fill={th.a} fontSize={6} opacity={0.12} fontFamily="monospace"
+                        transform={rotated ? `rotate(-30 ${p.x+8} ${p.y+3})` : undefined}>{l.n}</text>
                     </g>
                   );
                 })}
@@ -1366,7 +1374,8 @@ export default function CMETv4() {
                             fill={isSel?th.a+"44":"#00000099"} stroke={th.a}
                             strokeWidth={isSel?2:1.5} rx={1}/>
                           <text x={p.x} y={p.y+3} textAnchor="middle" fill={th.a}
-                            fontSize={6} fontWeight="bold" opacity={0.9}>IX</text>
+                            fontSize={6} fontWeight="bold" opacity={0.9}
+                            transform={rotated ? `rotate(-30 ${p.x} ${p.y+3})` : undefined}>IX</text>
                         </g>
                       ) : (
                         <circle cx={p.x} cy={p.y} r={isSel?4:3}
@@ -1381,21 +1390,24 @@ export default function CMETv4() {
                       {/* Stop code */}
                       <text x={lx} y={p.y+yo+2} textAnchor={anchor} fill={th.a}
                         fontSize={s.ix?8.5:7.5} fontWeight="bold" letterSpacing={1}
-                        opacity={isSel?1:s.ix?0.70:0.50} fontFamily="monospace">
+                        opacity={isSel?1:s.ix?0.70:0.50} fontFamily="monospace"
+                        transform={rotated ? `rotate(-30 ${lx} ${p.y+yo+2})` : undefined}>
                         {s.code}
                       </text>
 
                       {/* Stop name */}
                       <text x={lx} y={p.y+yo+11} textAnchor={anchor} fill={th.a}
                         fontSize={s.ix?7:6} opacity={isSel?0.85:0.35}
-                        fontFamily="monospace">
+                        fontFamily="monospace"
+                        transform={rotated ? `rotate(-30 ${lx} ${p.y+yo+11})` : undefined}>
                         {s.name.toUpperCase()}
                       </text>
 
                       {/* Bus interchange routes */}
                       {s.ix && s.busR.length > 0 &&
                         <text x={lx} y={p.y+yo+20} textAnchor={anchor} fill={th.a}
-                          fontSize={5.5} opacity={0.18} fontFamily="monospace" letterSpacing={1}>
+                          fontSize={5.5} opacity={0.18} fontFamily="monospace" letterSpacing={1}
+                          transform={rotated ? `rotate(-30 ${lx} ${p.y+yo+20})` : undefined}>
                           {s.busR.join("·")}
                         </text>}
                     </g>
@@ -1419,7 +1431,8 @@ export default function CMETv4() {
                       </circle>}
                       <polygon points={p.x+","+(p.y-9)+" "+(p.x+8)+","+(p.y+5)+" "+(p.x-8)+","+(p.y+5)}
                         fill={co+"22"} stroke={co} strokeWidth={1.2} opacity={0.85}/>
-                      <text x={p.x} y={p.y+3} textAnchor="middle" fill={co} fontSize={7} fontWeight="bold">!</text>
+                      <text x={p.x} y={p.y+3} textAnchor="middle" fill={co} fontSize={7} fontWeight="bold"
+                        transform={rotated ? `rotate(-30 ${p.x} ${p.y+3})` : undefined}>!</text>
                     </g>
                   );
                 })}
@@ -1462,8 +1475,10 @@ export default function CMETv4() {
                         <animate attributeName="opacity" values="0.35;0;0.35" dur="1.2s" repeatCount="indefinite"/>
                       </circle>
                       <circle cx={p.x} cy={p.y} r={7} fill={co+"44"} stroke={co} strokeWidth={1.8}/>
-                      <text x={p.x} y={p.y+4} textAnchor="middle" fontSize={11}>{ESA_ICONS[e.type]}</text>
-                      <text x={p.x+13} y={p.y-7} fill={co} fontSize={6.5} fontWeight="bold" fontFamily="monospace">{e.type}</text>
+                      <text x={p.x} y={p.y+4} textAnchor="middle" fontSize={11}
+                        transform={rotated ? `rotate(-30 ${p.x} ${p.y+4})` : undefined}>{ESA_ICONS[e.type]}</text>
+                      <text x={p.x+13} y={p.y-7} fill={co} fontSize={6.5} fontWeight="bold" fontFamily="monospace"
+                        transform={rotated ? `rotate(-30 ${p.x+13} ${p.y-7})` : undefined}>{e.type}</text>
                     </g>
                   );
                 })}
@@ -1535,24 +1550,26 @@ export default function CMETv4() {
                       <line x1={p.x} y1={pillY+labelH} x2={p.x} y2={p.y-triS}
                         stroke={t.c} strokeWidth={0.7} opacity={isSel?0.6:0.45}
                         strokeDasharray={isTerminal?"3,2":isSel?"none":"2,1"}/>
-                      {/* label pill */}
-                      <rect x={pillX} y={pillY} width={labelW} height={labelH}
-                        fill="#000a04" fillOpacity={0.92}
-                        stroke={isTerminal?"#ffaa00":t.c}
-                        strokeWidth={isSel?1.5:0.8} rx={2}
-                        strokeDasharray={isTerminal?"3,2":"none"}/>
-                      {/* ID — primary */}
-                      <text x={p.x} y={pillY+(isSel?10:9)} textAnchor="middle"
-                        fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?7.5:7} fontWeight="bold"
-                        fontFamily="monospace" letterSpacing={0.5}>
-                        {t.id+" "+(isTerminal?"⊡":arrow)}
-                      </text>
-                      {/* secondary line */}
-                      <text x={p.x} y={pillY+(isSel?19:16)} textAnchor="middle"
-                        fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?6:5.5} opacity={0.65}
-                        fontFamily="monospace">
-                        {isTerminal?"TERMINAL":t.speed+"km/h · "+(t.status==="STOPPED"?"STP":"MVG")}
-                      </text>
+                      {/* label pill — counter-rotated to stay horizontal in diagonal mode */}
+                      <g transform={rotated ? `rotate(-30 ${p.x} ${pillY + labelH/2})` : undefined}>
+                        <rect x={pillX} y={pillY} width={labelW} height={labelH}
+                          fill="#000a04" fillOpacity={0.92}
+                          stroke={isTerminal?"#ffaa00":t.c}
+                          strokeWidth={isSel?1.5:0.8} rx={2}
+                          strokeDasharray={isTerminal?"3,2":"none"}/>
+                        {/* ID — primary */}
+                        <text x={p.x} y={pillY+(isSel?10:9)} textAnchor="middle"
+                          fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?7.5:7} fontWeight="bold"
+                          fontFamily="monospace" letterSpacing={0.5}>
+                          {t.id+" "+(isTerminal?"⊡":arrow)}
+                        </text>
+                        {/* secondary line */}
+                        <text x={p.x} y={pillY+(isSel?19:16)} textAnchor="middle"
+                          fill={isTerminal?"#ffaa00":t.c} fontSize={isSel?6:5.5} opacity={0.65}
+                          fontFamily="monospace">
+                          {isTerminal?"TERMINAL":t.speed+"km/h · "+(t.status==="STOPPED"?"STP":"MVG")}
+                        </text>
+                      </g>
                     </g>
                   );
                 })}
